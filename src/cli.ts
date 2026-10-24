@@ -7,9 +7,10 @@ import { startEngine } from "./engine.js";
 import { startMeter } from "./meter.js";
 import type { NightEvent, RunEvent } from "./parser/index.js";
 import { startServer } from "./server/index.js";
-import { DEFAULT_KEEP_DAYS, expand, loadPinned, projectTiles, repoOf } from "./store/index.js";
+import { DEFAULT_KEEP_DAYS, expand, loadPinned, projectTiles, repoOf, watchSiteOf } from "./store/index.js";
 import { terminalPrinter } from "./terminal.js";
 import { parseArgs, usage } from "./usage.js";
+import { localWatchUrl, startWatchClient, watchOnBoard, watchOnTile } from "./watch/index.js";
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
 const command = parseArgs(process.argv.slice(2));
@@ -42,20 +43,38 @@ async function start(): Promise<void> {
     lastWarning = message;
     console.error(`nightshift: ${message}`);
   };
-  const tiles = () =>
-    projectTiles(board.projects(), loadPinned(pinnedFile, warn), { home: homedir(), nowMs: Date.now() });
+  const watchUrl = localWatchUrl(process.env.NIGHTSHIFT_NIGHTWATCH_URL, warn);
+  let refresh: () => void = () => {};
+  const watch = startWatchClient({ url: watchUrl, onChange: () => refresh() });
+  const tiles = () => {
+    const pinned = loadPinned(pinnedFile, warn);
+    return projectTiles(board.projects(), pinned, { home: homedir(), nowMs: Date.now() }).map((t) => ({
+      ...t,
+      watch: watchOnTile(t.watchSite, watch.status(), watch.snapshot()),
+    }));
+  };
   const server = await startServer(Number(process.env.NIGHTSHIFT_PORT) || 4400, {
+    watchUrl,
     view: (project) => {
       const view = board.view(project);
       const home = homedir();
       const folder = view.folder?.startsWith(home) ? `~${view.folder.slice(home.length)}` : view.folder;
-      const name =
-        loadPinned(pinnedFile, warn).find((p) => basename(expand(p.path, homedir())) === project)?.name ?? project;
-      return { ...view, name, folder, repo: view.folder ? repoOf(view.folder) : null, meter: meter.current() };
+      const pinned = loadPinned(pinnedFile, warn);
+      const name = pinned.find((p) => basename(expand(p.path, home)) === project)?.name ?? project;
+      const site = watchSiteOf(pinned, project, home);
+      return {
+        ...view,
+        name,
+        folder,
+        repo: view.folder ? repoOf(view.folder) : null,
+        meter: meter.current(),
+        watch: watchOnBoard(site, watch.status(), watch.snapshot()),
+      };
     },
     projects: tiles,
   });
   publish = server.publish;
+  refresh = server.refresh;
   setInterval(server.refresh, 30_000).unref(); // the meter changes without any event
   console.info(
     `Night Shift ${pkg.version} · watching ${root}\nHistory: ${join(dataDir, "nightshift.db")} (${keepDays} days)\nBoard: http://localhost:${server.port}/\n`,
@@ -63,6 +82,7 @@ async function start(): Promise<void> {
   const quit = async () => {
     engine.stop();
     meter.stop();
+    watch.stop();
     await server.close();
     process.exit(0);
   };

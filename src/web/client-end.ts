@@ -189,6 +189,7 @@ export const CLIENT_END = String.raw`  // ---- the usage meters in the header: 1
     renderTop(view);
     renderBoard(view, instant);
     renderAgents(view);
+    renderWatch(view);
     renderTerminal(view);
     if (!ui.panels.timeline.hidden) renderTimeline(view);
     tick();

@@ -12,7 +12,12 @@ export type NightServer = {
 };
 
 /** Where the boards come from (the store, wired in by the CLI). */
-export type BoardSource = { view: (project: string) => unknown; projects: () => unknown };
+export type BoardSource = {
+  view: (project: string) => unknown;
+  projects: () => unknown;
+  /** Where Night Watch's page is, for the "→ Night Watch" links. */
+  watchUrl?: string;
+};
 
 /** Boards are pushed at most this often, so a burst of log lines is one redraw. */
 const PUSH_EVERY_MS = 300;
@@ -78,7 +83,9 @@ export function startServer(port: number, source?: BoardSource): Promise<NightSe
       return;
     }
     if (req.method === "GET" && /^\/[^/]*$/.test(url.pathname) && url.pathname !== "/favicon.ico") {
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" }).end(boardPage());
+      res
+        .writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" })
+        .end(boardPage(source?.watchUrl));
       return;
     }
     res.writeHead(404, { "content-type": "text/plain" }).end("Not found");

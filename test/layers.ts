@@ -10,6 +10,7 @@ export const LAYERS: Record<string, string[]> = {
   store: ["parser"],
   server: ["store", "parser", "web"],
   web: [],
+  watch: [], // the Night Watch link: network in, plain data out
 };
 
 /** Node modules a pure layer may use. Anything else (fs, net, http, child_process, sqlite, ...) is not pure. */

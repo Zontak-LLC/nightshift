@@ -140,3 +140,19 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
 - **Limits (said plainly):** a project is its folder name, so two repositories with the same folder name share one board
   and one tile (as for agents). A session that started in a worktree or a subfolder belongs to its main repository.
   A usage-limit pause shows on every repository the session touched.
+
+- **The link to Night Watch** (`src/watch/`). Night Shift is the workshop, Night Watch the guard; they meet at the
+  release: Night Watch finds a problem, an issue is opened, Night Shift's agents fix it, the release goes out, Night
+  Watch watches again. Night Shift only READS: `startWatchClient` follows Night Watch's `GET /events` (the `state`
+  event) with `fetch`, backs off 1 s doubling to 30 s, drops old news when the stream drops, and shows "Night Watch: not
+  running". The address (`NIGHTSHIFT_NIGHTWATCH_URL`, default `http://localhost:4500`) must be this computer; anything
+  else is ignored with one warning. `watch/model.ts` reads the state defensively (a field of the wrong type is left out,
+  nothing throws), because Night Watch is another project whose shapes may change.
+  - **Site to project:** `watchSite` on a line of `projects.json` (`""` = none); default `magsmith` = `loader`,
+    `usehourly` = `usehourly`. A site Night Watch does not list shows a plain note.
+  - **Light** = the worst tile level of the site (problem = red, warn = amber, ok = green); tiles that are idle (not
+    connected yet) do not count against it. **Release** = the Deploys tile (its figure, age and reason).
+  - **Incidents as tickets** are a lane under the line, not a sixth station, because they have no ticket number and do
+    not move left to right. Open ones (any severity, colour by severity) and the five newest resolved ones. The advice is
+    the fix Night Watch proposes, else the first triage step. "Healed by" needs a fix attempt with the verdict "healed".
+  - Ruled out: buttons that act on Night Watch (resolve, retriage, open an issue). Those stay in Night Watch.

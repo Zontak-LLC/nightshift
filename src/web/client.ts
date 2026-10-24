@@ -7,6 +7,8 @@
 import { CLIENT_BOARD } from "./client-board.js";
 import { CLIENT_END } from "./client-end.js";
 import { CLIENT_START } from "./client-start.js";
+import { CLIENT_WATCH } from "./client-watch.js";
 import { SHIFT } from "./shift.js";
+import { WATCH_VIEW } from "./watch-view.js";
 
-export const CLIENT = `${CLIENT_START}\n${SHIFT}\n${CLIENT_BOARD}${CLIENT_END}`;
+export const CLIENT = `${CLIENT_START}\n${SHIFT}\n${WATCH_VIEW}\n${CLIENT_WATCH}\n${CLIENT_BOARD}${CLIENT_END}`;

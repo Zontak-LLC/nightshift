@@ -177,6 +177,7 @@ Claude writes most of the code; these keep it from drifting into a mess on a lon
 
 ## 13. Change log
 
+- 0.9 (2026-10-24): the link to Night Watch (read only): a Live site strip, a From Night Watch lane of incidents on the board of a watched project, a site light on its start page tile, and a `→ Night Watch` link (decision in decisions.md).
 - 0.8 (2026-10-24): a session shows on every repository it works in (steps split by where they work), and the start page lists a fixed project list from `~/.nightshift/projects.json` (idle ones dimmer), plus recently used repos under `~/Projects`.
 - 0.7 (2026-10-24): background agents (subagents) are followed and filed under the project they really work in (section 5b, scenario 11).
 - 0.1 (2026-10-23): first draft from the conversation: Claude Code logs only in v1, GitHub with CI, Node.js + TypeScript, SSE, SQLite, local page, Rule 1 and the guardrails.

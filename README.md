@@ -33,6 +33,21 @@ looked at every 30 seconds: `5 h  31% · resets 06:40` and `Week 52%`, ten segme
 missing. The file is `{"five_hour": 31, "seven_day": 52, "five_hour_resets_at": <unix seconds>, "updated": "<ISO time>"}`.
 Times show in the browser's local time.
 
+## Night Watch link
+
+Night Shift is the workshop (the coding work); [Night Watch](../nightwatch) is the guard (the live sites). Night Shift
+only READS Night Watch: it follows `http://localhost:4500/events` (change it with `NIGHTSHIFT_NIGHTWATCH_URL`; only an
+address on this computer is accepted), reconnects with a growing wait, and shows "Night Watch: not running" when it is off.
+- A project with a watched site shows a **Live site** strip: the site's light (its worst tile), the open incidents, the
+  last release and its verdict, and a link `→ Night Watch` to `http://localhost:4500/?site=<id>`.
+- Open incidents appear on the Board tab in a **From Night Watch** lane (title, severity, count, age, the AI's
+  recommended fix, the issue draft's title). Resolved ones move to **Done · healed** with "healed by ..." when Night
+  Watch tried a fix that worked, else "cleared by itself". There are no buttons that act on Night Watch.
+- The start page shows a small site light on each linked project's tile, and every page has a `→ Night Watch` link.
+- Which project is which site: an optional `watchSite` in `~/.nightshift/projects.json`
+  (`{ "path": "~/Projects/magsmith", "name": "Loader", "watchSite": "loader" }`; `""` turns the link off). Without it,
+  `magsmith` is `loader` and `usehourly` is `usehourly`.
+
 ## History
 
 Night Shift keeps what it saw in one SQLite file (`~/.nightshift/nightshift.db`). Stop and start it: the board comes
