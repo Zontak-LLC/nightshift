@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+*.sqlite
+*.sqlite-journal
+.DS_Store
+nightshift.config.json

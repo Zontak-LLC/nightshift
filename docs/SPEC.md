@@ -1,0 +1,133 @@
+# Night Shift: specification
+
+Version 0.2 · 2026-10-23 · Owner: Denis Zontak · Status: draft, being shaped by conversation
+
+## 1. One sentence
+
+Night Shift is a free, open-source tool any developer runs on their own computer to see, live, what their Claude Code agents are doing right now and what they did overnight, without reading terminal logs.
+
+## 2. Why it exists
+
+- I do agentic programming: Claude Code works on tickets for hours, sometimes all night, often several sessions at once.
+- Today the only way to know what is happening is to scroll terminal output or read raw log files. I cannot see at a glance which ticket is being worked on, what step it is at, what was finished, or what got stuck.
+- The first version (built on 2026-10-23 as a private claude.ai page fed by a Python script) proved the idea: a board, a timeline and a "now working on" strip were exactly what I wanted to look at. It was polled every 30 seconds and tied to one workflow. This project makes it a real tool.
+- It is also an evening hobby project. It should be fun to build and stretch me past web pages: a background service, live streaming, a local database, and later a native app.
+
+## 3. Who it is for
+
+- **Any developer who uses Claude Code** and lets it work for long stretches (overnight runs, several sessions at once). Each developer runs their own copy on their own computer and sees only their own work.
+- **I am the first user and the only builder.** I build it for my own use first, but every choice must work for a stranger who installs it: no paths, names or settings of mine in the code.
+- **No accounts and no server:** nothing to sign up for, nothing sent anywhere. Installing is one command.
+- Not in version 1: a shared team view (several developers watching one board). It is an open question for later.
+
+## 4. Rule 1: the right fit for the job
+
+Every choice below was picked for this job, not from habit. The runner-up is named so the choice can be revisited.
+
+| Part | Choice | Why it fits | Runner-up |
+|---|---|---|---|
+| Background service | Node.js 22 + TypeScript | Good at watching files and streaming events; one language from service to screen | Go: leaner, but no real gain on one Mac |
+| Live updates | Server-Sent Events (SSE) | Updates only flow from the service to the page, which is exactly what SSE does; simpler than WebSockets | WebSockets: two-way, not needed |
+| History | SQLite, one file | Keeps every night's events, searchable, no server to run | JSON files: simple but slow to search |
+| Screen | A local web page at `http://localhost:4400` | Opens in any browser; I already design well for the web | A menu-bar app: a later stretch |
+| Hosting | None: it runs on each developer's own computer | Their agents and logs are there; private code and data never leave it | A hosted service (needs accounts and trust; not now) |
+| Code home and install | GitHub, open source (MIT), CI on every change; published to npm so `npx nightshift` runs it | Other developers can read, trust, install and improve it | A downloadable app (signing and updates are much more work) |
+
+## 5. What it reads (the data)
+
+- **Claude Code session logs:** one JSON-lines file per session, under `~/.claude/projects/<project-folder>/<session-id>.jsonl`. Each line is one event: a message, a tool call (read a file, edit a file, run a command), a tool result, with a timestamp, the working folder and the git branch.
+- **Workflow journals:** when a multi-agent workflow runs, `.../subagents/workflows/<run-id>/journal.jsonl` records each agent: started, finished, result.
+- Night Shift only **reads** these files. It never writes to them, never starts or stops an agent, and never sends anything off the Mac.
+
+## 6. Version 1 scope (the MVP)
+
+**In:**
+1. **Now:** every Claude Code session active in the last 10 minutes, one row each: project, branch, what it is doing right now ("Editing src/lib/day-nav.ts", "Running npm run ci"), and how long ago. It updates live (under 2 seconds after the log changes).
+2. **Session detail:** click a session to see its steps as a timeline: reads, edits, commands, test results, in order, with times.
+3. **Workflow board:** when a workflow is running, its agents as cards moving through stations (queued, working, checking, done, skipped), like the 2026-10-23 assembly line.
+4. **History:** last night's runs kept in SQLite; a "Last night" view that summarises what was done: sessions, files changed, commands run, errors.
+5. **One command to start, for anyone:** `npx nightshift` finds the Claude Code logs folder on its own (macOS, Linux and Windows locations), starts the service and opens the page. A first-run screen says what it found ("12 projects, 3 sessions running") and how to change it.
+6. **Settings without a settings screen:** an optional `nightshift.config.json` (port, which projects to watch, which to hide) with safe defaults; the page shows where the file lives.
+
+**Out (not in version 1, on purpose):**
+- Watching GitHub pull requests and CI runs (version 2).
+- Controlling agents (pausing, stopping): Night Shift only watches.
+- Accounts, sign-in, cloud hosting, a shared team board, a phone view.
+- Costs and token counts (version 2, if the logs carry them).
+- The menu-bar app and the e-ink desk display (later stretches).
+
+## 7. How it works (architecture)
+
+```
+Claude Code log files ──► Watcher ──► Parser ──► Event store (SQLite) ──► SSE stream ──► Web page
+     (read only)        (file changes) (line → event)  (history + now)     (/events)     (board, timeline)
+```
+
+- **Watcher:** follows the log folders, reads only the new lines of a file that grew, survives files that are created, rotated or deleted.
+- **Parser:** turns one raw log line into one Night Shift event (`session.started`, `tool.read`, `tool.edit`, `tool.command`, `tool.result`, `agent.started`, `agent.finished`, ...). Pure functions, no file access, fully tested.
+- **Event store:** writes events to SQLite and keeps the current state of each session in memory.
+- **Stream:** `GET /events` sends every new event to the open pages (SSE); `GET /state` returns the current state for a page that just opened.
+- **Page:** plain TypeScript and CSS (no framework needed for v1), drawn from the state plus the stream.
+- **Layers only point one way:** page → stream → store → parser. The page never reads files; the parser never touches the database. An architecture test enforces it.
+
+## 8. How it should look and feel
+
+- Calm, like UseHourly v4: dark by default (a deep blue slate, not black), one soft accent, a monospace font for commands and file names.
+- One animation at a time: only the card that just changed moves.
+- Glanceable from across the room: the "Now" row is large; detail is one click away.
+- No brown, no glow on black.
+
+## 9. How we know it works (scenarios)
+
+Each scenario is an automated test that feeds real-shaped log lines in and checks what the page state shows.
+
+1. **A session starts:** a new log file appears; within 2 seconds "Now" shows the project, branch and "Starting".
+2. **A session works:** it reads a file, edits it, runs `npm test`; the session timeline shows Read, Edit, Command, Result in that order, with the file names and the exit status.
+3. **Two sessions at once:** two projects work at the same time; "Now" shows both, each with its own last step, never mixed.
+4. **A workflow runs:** a journal records 3 agents; the board shows them moving queued → working → done, and a skipped one in "skipped".
+5. **A broken line:** a half-written or unknown log line is skipped and counted, never crashes the service.
+6. **Restart:** stop and start Night Shift; history and current state come back from SQLite; nothing is shown twice.
+7. **Last night:** after an 8-hour run, "Last night" lists the sessions, the files changed and any failed commands.
+8. **Read only:** no test, and no code path, writes inside the Claude Code folder.
+9. **A stranger installs it:** on a clean machine with Claude Code logs in the usual place, `npx nightshift` starts, finds the logs, and the first-run screen names what it found, with no setup.
+10. **Nothing leaves the computer:** the service listens on localhost only and makes no outgoing network calls (a test fails if it tries).
+
+## 10. Guardrails (quality, from the first commit)
+
+Claude writes most of the code; these keep it from drifting into a mess on a long project.
+
+1. Strict TypeScript; Biome as linter and formatter.
+2. A rules script: no `@ts-ignore`, no `any`, no TODO without a ticket number, no file writes under the Claude Code folder, no hard-coded personal paths.
+3. An architecture test that enforces the one-way layers (section 7).
+4. Scenario tests (section 9), on real-shaped sample logs kept in `test/fixtures/`.
+5. Small files (under about 300 lines) and small functions, enforced by the linter.
+6. One gate: `npm run ci` runs all of the above; GitHub Actions runs the same command on every push.
+7. A fresh reviewer (a new Claude with no memory of the change) reads every diff before it is committed.
+8. `CLAUDE.md` (how the project works) and `docs/decisions.md` (what was chosen and why) are updated in the same commit as the change they describe.
+9. Small tickets: one evening, one ticket, one visible win.
+
+## 11. First week, one ticket per evening
+
+| # | Ticket | The visible win |
+|---|---|---|
+| 1 | Repo, guardrails and CI, with one passing scenario test; README that says what it is and how to run it | A green check on GitHub |
+| 2 | Parser: log line → event, with fixtures from real logs | Tests show real sessions turned into steps |
+| 3 | Watcher + `/events` stream | `curl localhost:4400/events` prints steps live while Claude works |
+| 4 | The "Now" page | A browser tab shows every running session, updating live |
+| 5 | Session timeline | Click a session, see its steps in order |
+| 6 | SQLite history + restart | Stop and start; nothing lost, nothing doubled |
+| 7 | Workflow board | The assembly line, live |
+| 8 | `npx nightshift` for anyone: find the logs on any OS, first-run screen, publish to npm | A friend can run it in one command |
+
+## 12. Open questions
+
+1. Name: keep "Night Shift"? (Check the npm name `nightshift` is free; otherwise `claude-nightshift`.)
+2. Port 4400, or another?
+3. Should "Last night" also be sent somewhere in the morning (a notification, an email to myself), or only shown on the page?
+4. Which projects to watch by default: all of them, or ask on first run?
+5. A shared team board (several developers, one screen): ever, or never? It would need a server and accounts.
+
+## 13. Change log
+
+- 0.1 (2026-10-23): first draft from the conversation: Claude Code logs only in v1, GitHub with CI, Node.js + TypeScript, SSE, SQLite, local page, Rule 1 and the guardrails.
+- 0.2 (2026-10-23): it is for any developer, not only me: install with `npx nightshift`, find the logs on any OS, a first-run screen, an optional config file, nothing leaves the computer; team board moved to the open questions.
