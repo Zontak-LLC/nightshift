@@ -1,6 +1,9 @@
 import { basename } from "node:path";
 import { type NightEvent, type RunEvent, titleInLabel } from "../parser/index.js";
+import { columnsOf, newTicket, widenTimes } from "./columns.js";
+import { type RootOf, repoRootOf } from "./root.js";
 import { type Alert, alertsOf, pauseTicket, type Trouble, troubleFrom } from "./trouble.js";
+import { type AgentRow, Workers } from "./workers.js";
 
 /**
  * The board's live state, built from events alone (no clock, no disk): a session's place and current step, and each
@@ -49,10 +52,12 @@ export type BoardView = {
   folder: string | null;
   branch: string | null;
   now: NowRow[];
+  /** Background agents working in this project (wherever their parent session started). */
+  agents: AgentRow[];
   alerts: Alert[];
   run: { runId: string; startedAt: string | null; lastAt: string; columns: Record<Station, Ticket[]> } | null;
 };
-export type ProjectRow = { project: string; folder: string; lastAt: string; running: number };
+export type ProjectRow = { project: string; folder: string; lastAt: string; running: number; agents: number };
 
 /** Steps that mean "checking the work" rather than writing it. */
 const CHECKING = /\b(npm run ci|npm test|vitest|playwright|e2e|gh pr checks|gh run watch|biome check|tsc)\b/i;
@@ -66,6 +71,16 @@ export class Board {
   /** agentId -> where its steps belong. */
   private agents = new Map<string, { runId: string; number: number | null }>();
   private clock = 0;
+  private workers: Workers;
+
+  constructor(rootOf: RootOf = repoRootOf) {
+    this.workers = new Workers(rootOf, (id) => this.sessions.get(id)?.cwd ?? null);
+  }
+
+  /** The project and name to tag a background agent's step with, or null for the main thread or a pipeline agent. */
+  agentLabel(agentId: string): { project: string; name: string } | null {
+    return this.agents.has(agentId) ? null : this.workers.label(agentId);
+  }
 
   /** Applies one event; returns true when something on a board changed. */
   apply(event: NightEvent | RunEvent): boolean {
@@ -73,7 +88,8 @@ export class Board {
   }
 
   private applySession(e: NightEvent): boolean {
-    if (e.agentId) return this.applyAgentStep(e, e.agentId);
+    if (e.agentId)
+      return this.agents.has(e.agentId) ? this.applyAgentStep(e, e.agentId) : this.workers.apply(e, e.agentId);
     const s = this.sessions.get(e.sessionId);
     if (e.kind === "session.seen") {
       this.sessions.set(e.sessionId, {
@@ -188,11 +204,11 @@ export class Board {
   }
 
   /** The projects with a session, most recently active first. */
-  projects(): ProjectRow[] {
+  projects(nowMs = Date.now()): ProjectRow[] {
     const rows = new Map<string, ProjectRow>();
     for (const [id, s] of this.sessions) {
       const project = basename(s.cwd) || s.cwd;
-      const row = rows.get(project) ?? { project, folder: s.cwd, lastAt: "", running: 0 };
+      const row = rows.get(project) ?? { project, folder: s.cwd, lastAt: "", running: 0, agents: 0 };
       row.lastAt = later(row.lastAt, s.lastAt);
       for (const run of this.runs.values()) {
         if (run.sessionId !== id) continue;
@@ -203,14 +219,21 @@ export class Board {
       }
       rows.set(project, row);
     }
+    for (const [project, w] of this.workers.projects(nowMs, (id) => this.agents.has(id))) {
+      const row = rows.get(project) ?? { project, folder: w.folder, lastAt: "", running: 0, agents: 0 };
+      row.lastAt = later(row.lastAt, w.lastAt);
+      row.agents = w.agents;
+      rows.set(project, row);
+    }
     return [...rows.values()].sort((a, b) => b.lastAt.localeCompare(a.lastAt));
   }
 
   /** One project's board: its newest session's place, what is happening now, and its newest pipeline run. */
-  view(project: string): BoardView {
+  view(project: string, nowMs = Date.now()): BoardView {
     const mine = [...this.sessions].filter(([, s]) => (basename(s.cwd) || s.cwd) === project);
     mine.sort(([, a], [, b]) => b.lastAt.localeCompare(a.lastAt));
     const newest = mine[0]?.[1];
+    const agents = this.workers.rows(project, nowMs, (id) => this.agents.has(id));
     const ids = new Set(mine.map(([id]) => id));
     const runs = [...this.runs.values()].filter((r) => ids.has(r.sessionId)).sort((a, b) => b.seen - a.seen);
     const run = runs[0] ?? null;
@@ -224,9 +247,10 @@ export class Board {
     );
     return {
       project,
-      folder: newest?.cwd ?? null,
+      folder: newest?.cwd ?? this.workers.projects(nowMs).get(project)?.folder ?? null,
       branch: newest?.branch ?? null,
       now: now.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6),
+      agents,
       alerts,
       run: run && { runId: run.runId, startedAt: run.startedAt, lastAt: run.lastAt, columns: columnsOf(run) },
     };
@@ -246,43 +270,4 @@ function nowRows(sessions: Session[], run: Run | null): NowRow[] {
     }
   }
   return now;
-}
-
-function widenTimes(t: Ticket, at: string): boolean {
-  if (!at) return false;
-  const start = t.startedAt && t.startedAt < at ? t.startedAt : at;
-  const end = t.finishedAt && t.finishedAt > at ? t.finishedAt : at;
-  if (start === t.startedAt && end === t.finishedAt) return false;
-  Object.assign(t, { startedAt: start, finishedAt: end });
-  return true;
-}
-
-function newTicket(number: number, title: string, queueIndex: number): Ticket {
-  return {
-    number,
-    title,
-    station: "queued",
-    step: null,
-    steps: 0,
-    recent: [],
-    startedAt: null,
-    finishedAt: null,
-    status: null,
-    pr: null,
-    summary: null,
-    queueIndex,
-    agentId: null,
-    trouble: null,
-  };
-}
-
-function columnsOf(run: Run): Record<Station, Ticket[]> {
-  const cols: Record<Station, Ticket[]> = { queued: [], working: [], checking: [], done: [], skipped: [] };
-  for (const t of run.tickets.values()) cols[t.station].push(t);
-  cols.queued.sort((a, b) => a.queueIndex - b.queueIndex);
-  cols.working.sort((a, b) => b.steps - a.steps);
-  cols.checking.sort((a, b) => b.steps - a.steps);
-  cols.done.sort((a, b) => (b.finishedAt ?? "").localeCompare(a.finishedAt ?? ""));
-  cols.skipped.sort((a, b) => a.queueIndex - b.queueIndex);
-  return cols;
 }

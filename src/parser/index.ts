@@ -8,5 +8,5 @@ export {
   type RunEvent,
   titleInLabel,
 } from "./journal.js";
-export { parseLine, parseLog } from "./line.js";
+export { parseAgentMeta, parseLine, parseLog } from "./line.js";
 export { toolSummary } from "./summary.js";

@@ -24,7 +24,7 @@ async function start(): Promise<void> {
     },
     projects: () => board.projects(),
   });
-  const print = terminalPrinter();
+  const print = terminalPrinter((id) => board.agentLabel(id));
   console.info(`Night Shift ${pkg.version} · watching ${root}\nBoard: http://localhost:${server.port}/\n`);
   const stop = watchLogs({
     root,

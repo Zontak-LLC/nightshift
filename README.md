@@ -36,4 +36,14 @@ npm run dev     # the command, restarting on every change
 - [docs/decisions.md](docs/decisions.md): the decision tree, every choice and why.
 - [CLAUDE.md](CLAUDE.md): how the code is laid out and the rules it keeps.
 
+## Background agents
+
+Claude Code runs helpers ("subagents") in the background. Night Shift follows their logs too
+(`<session>/subagents/agent-*.jsonl`, with the name from `agent-*.meta.json`). Each helper is filed under the project
+it **really works in**, not the folder its parent session started in: the git repository most of its tool calls touch
+(`cd`, `git -C`, file paths). A linked worktree counts as its main repository and is marked "(worktree)". With no
+clear repository it stays under its parent's project. The board shows them under the line, the NOW strip says
+"3 agents working", the Terminal tab streams their steps tagged with the agent's name, and the Timeline draws a bar
+for each. The start page lists projects that only helpers touched.
+
 MIT licence.

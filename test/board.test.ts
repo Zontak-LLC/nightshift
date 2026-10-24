@@ -130,12 +130,13 @@ describe("the board follows a pipeline through the night", () => {
     expect(board.view("no-such-project")).toMatchObject({ run: null, now: [], folder: null });
   });
 
-  it("ignores steps from an agent it does not know, and finished tickets do not move", () => {
+  it("treats an agent it does not know as a background agent (never a ticket), and finished tickets do not move", () => {
     const board = demoNight();
-    expect(board.apply(step("agent-unknown", "Editing x.ts", "2026-10-23T21:40:00.000Z"))).toBe(false);
+    expect(board.apply(step("agent-unknown", "Editing x.ts", "2026-10-23T21:40:00.000Z"))).toBe(true);
     board.apply(step("agent-11", "Editing late.ts", "2026-10-23T21:41:00.000Z")); // only its time is kept
     expect(numbers(board.view("demo-app").run?.columns.done ?? [])).toEqual([11]);
     expect(board.view("demo-app").run?.columns.done[0]).toMatchObject({ step: null, steps: 0 });
+    expect(numbers(board.view("demo-app").run?.columns.working ?? [])).toEqual([13]);
   });
 
   it("shows a newly started run at once, even before its first step, over an older busy run", () => {

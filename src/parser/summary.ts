@@ -40,7 +40,10 @@ export function toolSummary(tool: string, input: Input, cwd: string): string {
   const verb = PATH_TOOLS[tool];
   if (verb) return `${verb} ${showPath(text(input.file_path) || text(input.notebook_path), cwd)}`.trim();
   if (tool === "Bash" || tool === "bash")
-    return short(text(input.description) || `Running ${program(text(input.command))}`);
+    return short(
+      text(input.description) ||
+        `Running ${program(text(input.command).replace(/^\s*(?:cd\s+(?:"[^"]*"|'[^']*'|\S+)\s*(?:&&|;)\s*)+/, ""))}`,
+    );
   if (tool === "Grep" || tool === "Glob") return short(`Searching for ${text(input.pattern)}`);
   if (tool === "Agent" || tool === "Task") return short(`Agent: ${text(input.description) || "working"}`);
   if (tool === "WebSearch") return short(`Searching the web: ${text(input.query)}`);

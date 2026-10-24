@@ -1,4 +1,5 @@
 import type { NightEvent, ParseResult } from "./events.js";
+import { pathsOf } from "./paths.js";
 import { redact } from "./redact.js";
 import { toolSummary } from "./summary.js";
 import { troubleOf } from "./trouble.js";
@@ -43,7 +44,15 @@ function assistantEvents(raw: Raw, at: string, sessionId: string): NightEvent[] 
     const name = str(b.name);
     const input = b.input && typeof b.input === "object" ? (b.input as Record<string, unknown>) : {};
     if (b.type === "tool_use" && id && name)
-      out.push({ kind: "tool.use", at, sessionId, toolUseId: id, tool: name, summary: toolSummary(name, input, cwd) });
+      out.push({
+        kind: "tool.use",
+        at,
+        sessionId,
+        toolUseId: id,
+        tool: name,
+        summary: toolSummary(name, input, cwd),
+        paths: pathsOf(name, input, cwd),
+      });
     else if (b.type === "text" && str(b.text).trim())
       out.push({ kind: "reply", at, sessionId, text: firstLine(str(b.text)) });
   }
@@ -105,7 +114,8 @@ export function parseLine(line: string): ParseResult {
   if (!sessionId) return { events: [], skipped: 1 };
   if (type === "ai-title" || type === "pr-link") return metaEvent(raw, type, at, sessionId);
   if (type !== "assistant" && type !== "user") return { events: [], skipped: 1 };
-  // A subagent's own conversation (a "sidechain") is not the session's main thread: its steps show, its prompt does not.
+  // A subagent's own conversation (a "sidechain") is not the session's main thread: its steps show; its prompt
+  // becomes the agent's task (a name for it), never a prompt of the session.
   const seen: NightEvent[] = raw.cwd
     ? [{ kind: "session.seen", at, sessionId, cwd: str(raw.cwd), branch: str(raw.gitBranch) || null }]
     : [];
@@ -116,7 +126,10 @@ export function parseLine(line: string): ParseResult {
     : type === "assistant"
       ? assistantEvents(raw, at, sessionId)
       : userEvents(raw, at, sessionId);
-  const events = raw.isSidechain === true ? rest.filter((e) => e.kind !== "prompt") : rest;
+  const side = raw.isSidechain === true;
+  const events = side ? rest.map((e) => (e.kind === "prompt" ? { ...e, kind: "agent.task" as const } : e)) : rest;
+  if (side && type === "assistant" && (raw.message as Raw | undefined)?.stop_reason === "end_turn" && !trouble)
+    events.push({ kind: "turn.end", at, sessionId });
   const agentId = str(raw.agentId);
   const all = [...seen, ...events];
   return { events: agentId ? all.map((e) => ({ ...e, agentId })) : all, skipped: 0 };
@@ -143,4 +156,14 @@ export function parseLog(text: string): ParseResult {
     }
   }
   return { events, skipped };
+}
+
+/**
+ * The small `agent-<id>.meta.json` file Claude Code keeps beside a background agent's log: it holds the short
+ * description the agent was started with. `null` when it has none or cannot be read.
+ */
+export function parseAgentMeta(text: string, sessionId: string, agentId: string): NightEvent | null {
+  const raw = read(text);
+  const title = firstLine(str(raw?.description), 80);
+  return title ? { kind: "agent.title", at: "", sessionId, agentId, title } : null;
 }

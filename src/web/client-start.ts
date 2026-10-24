@@ -45,7 +45,7 @@ export const CLIENT_START = String.raw`
       var a = el("a", "project");
       a.href = "/" + encodeURIComponent(r.project);
       a.append(el("b", null, r.project), el("span", null, r.folder));
-      a.append(el("span", null, (r.running ? r.running + " working · " : "") + "last active " + hhmm(r.lastAt)));
+      a.append(el("span", null, (r.running ? r.running + " working · " : "") + (r.agents ? r.agents + (r.agents === 1 ? " agent" : " agents") + " working · " : "") + "last active " + hhmm(r.lastAt)));
       grid.append(a);
     });
     root.append(grid);
@@ -119,7 +119,10 @@ export const CLIENT_START = String.raw`
       cols[s[0]] = col;
       floor.append(col);
     });
-    ui.panels.board.append(floor);
+    ui.agents = el("section", "agents");
+    ui.agents.setAttribute("aria-label", "Background agents");
+    ui.agents.hidden = true;
+    ui.panels.board.append(floor, ui.agents);
     buildTerminal(ui.panels.terminal);
     buildTimeline(ui.panels.timeline);
 

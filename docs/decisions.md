@@ -80,3 +80,26 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
 - Strict TypeScript, Biome, a rules script (no ts-ignore, TODO needs a ticket, no personal paths, only `src/store/`
   writes to disk, files under 300 lines), an architecture test (layers point one way), scenario tests, one
   `npm run ci`, a fresh reviewer before each commit. (2026-10-23)
+
+## How are background agents shown? (ticket 7, 2026-10-24)
+
+- **Each background agent is a "worker", linked to its parent session** (2026-10-24, the owner found that the board
+  showed only the main session). Its log is `<session>/subagents/agent-<id>.jsonl`; the small `agent-<id>.meta.json`
+  beside it holds the description it was started with, which is its name. With no description the name is the first
+  line of its task prompt. Pipeline agents (a workflow's tickets) keep their own path through the run; every other agent
+  id is a worker.
+- **Its project comes from where it works, not where it started.** A subagent's lines carry the parent's `cwd`, so that
+  says nothing. Instead the parser lists the paths each tool call touches (`parser/paths.ts`: file tools' paths, a
+  command's `cd` targets, `git -C` folders, any absolute or `~/` path in the command). The store maps each to its git
+  repository (`store/root.ts`: walk up to the folder with `.git`) and the worker's project is the repository with the
+  most calls (a tie goes to the first seen). A path under `.claude/worktrees/<x>` or a `.git` file pointing at
+  `<main>/.git/worktrees/<x>` counts as the main repository, marked "(worktree)". With no votes it falls back to the
+  parent session's folder.
+  - **Limits (said plainly):** a command that never names a folder (`npm test` after an earlier `cd` in another
+    call) gives no vote; read-only looks at a path outside any repo (`/tmp`, `~/.claude`) give none; the home folder
+    never counts as a repo, so a dotfiles repository cannot take over; the project name is the folder name, so two
+    repositories with the same folder name share a board; a short agent that only searches the web stays under its
+    parent. The project can change while the agent works, as the votes change.
+- **Working or finished:** an agent is "working" until its turn ends with an answer (`stop_reason: end_turn`) or it has
+  been quiet for 10 minutes. Agents quiet for 6 hours leave the board. Old agent files quiet at start are not read, so
+  history is not shown as live.
