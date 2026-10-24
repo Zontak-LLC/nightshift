@@ -11,7 +11,11 @@ before changing anything; update both in the same commit when a choice changes.
   `follow.ts` walks `<root>/<project>/*.jsonl` and starts over when a file is replaced (new inode) or shrinks).
   On start, files quiet for 10 minutes are followed from their end (old history is not "now"); recent ones are read
   (the last 256 KB of a big one); a file that appears later is read from its start.
-- `src/store/`: SQLite history and the current state. The ONLY place that writes to disk.
+- `src/store/`: the board (state from events) and `history.ts`, the SQLite history (`node:sqlite`): every event under a
+  key `<file>#<inode>.<epoch>@<line end>.<n>` (`INSERT OR IGNORE`, so a line read twice is stored once and not
+  applied twice), plus each file's saved offset. The ONLY place that writes to disk. `src/engine.ts` wires it: replay
+  the stored events into the `Board`, prune (30 days, whole sessions, hourly), then `watchLogs` with `resume` and `onRead`.
+  A file that was replaced (new inode) or cut short gets a new `epoch`, so its lines are new, not repeats.
 - `src/server/`: `/events` (Server-Sent Events, one `event: <kind>` frame per event), `/health`, later `/state`; binds
   127.0.0.1 only and answers only a `Host` of `127.0.0.1:<port>` or `localhost:<port>` (DNS rebinding), no CORS;
   a page that stops reading is dropped past 1 MB waiting. `res.write()` there is a network write, which the

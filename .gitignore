@@ -5,3 +5,4 @@ coverage
 *.sqlite-journal
 .DS_Store
 nightshift.config.json
+.nightshift/

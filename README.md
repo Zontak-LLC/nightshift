@@ -21,8 +21,25 @@ curl -N localhost:4400/events   # the same steps as a live stream (Server-Sent E
 21:04:31  demo-app           ⇪ pull request #42
 ```
 
-Settings: `NIGHTSHIFT_PORT` (default 4400) and `NIGHTSHIFT_LOGS` (default `~/.claude/projects`). The service listens
+Settings: `NIGHTSHIFT_PORT` (default 4400), `NIGHTSHIFT_LOGS` (default `~/.claude/projects`), `NIGHTSHIFT_DATA`
+(where the history is kept, default `~/.nightshift`) and `NIGHTSHIFT_KEEP_DAYS` (default 30). The service listens
 on 127.0.0.1 only.
+
+## History
+
+Night Shift keeps what it saw in one SQLite file (`~/.nightshift/nightshift.db`). Stop and start it: the board comes
+back as it was, each log file is read on from where it stopped (a file that was replaced or cut short is read again from
+its top), and no step is shown or stored twice. Sessions that have been quiet for more than 30 days are removed, once an
+hour. The file holds your prompts' first lines and tool summaries: it stays on your computer, and the folder is private
+to you.
+
+## Run it in the background
+
+```bash
+nohup npx tsx src/cli.ts > /tmp/nightshift.log 2>&1 &    # start (from this folder)
+curl -s localhost:4400/health                              # {"ok":true}
+pkill -f "tsx src/cli.ts"                                  # stop (it saves its place and closes the file)
+```
 
 ## Work on it
 

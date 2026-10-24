@@ -3,18 +3,36 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { startEngine } from "./engine.js";
+import type { NightEvent, RunEvent } from "./parser/index.js";
 import { startServer } from "./server/index.js";
-import { Board, repoOf } from "./store/index.js";
+import { DEFAULT_KEEP_DAYS, repoOf } from "./store/index.js";
 import { terminalPrinter } from "./terminal.js";
 import { parseArgs, usage } from "./usage.js";
-import { watchLogs } from "./watcher/index.js";
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
 const command = parseArgs(process.argv.slice(2));
 
 async function start(): Promise<void> {
   const root = process.env.NIGHTSHIFT_LOGS || join(homedir(), ".claude", "projects");
-  const board = new Board();
+  const dataDir = process.env.NIGHTSHIFT_DATA || join(homedir(), ".nightshift");
+  const keepDays = Number(process.env.NIGHTSHIFT_KEEP_DAYS) || DEFAULT_KEEP_DAYS;
+  let publish: (event: NightEvent | RunEvent) => void = () => {};
+  const print = terminalPrinter((id) => engine.board.agentLabel(id));
+  const engine = startEngine({
+    root,
+    dbPath: join(dataDir, "nightshift.db"),
+    keepDays,
+    onNew: (event) => {
+      publish(event);
+      if (!("runId" in event)) {
+        const line = print(event);
+        if (line) console.info(line);
+      }
+    },
+    onError: (error) => console.error(`nightshift: ${error instanceof Error ? error.message : String(error)}`),
+  });
+  const { board } = engine;
   const server = await startServer(Number(process.env.NIGHTSHIFT_PORT) || 4400, {
     view: (project) => {
       const view = board.view(project);
@@ -24,24 +42,12 @@ async function start(): Promise<void> {
     },
     projects: () => board.projects(),
   });
-  const print = terminalPrinter((id) => board.agentLabel(id));
-  console.info(`Night Shift ${pkg.version} · watching ${root}\nBoard: http://localhost:${server.port}/\n`);
-  const stop = watchLogs({
-    root,
-    onEvent: (event) => {
-      board.apply(event);
-      server.publish(event);
-      const line = print(event);
-      if (line) console.info(line);
-    },
-    onRun: (event) => {
-      board.apply(event);
-      server.publish(event);
-    },
-    onError: (error) => console.error(`nightshift: ${error instanceof Error ? error.message : String(error)}`),
-  });
+  publish = server.publish;
+  console.info(
+    `Night Shift ${pkg.version} · watching ${root}\nHistory: ${join(dataDir, "nightshift.db")} (${keepDays} days)\nBoard: http://localhost:${server.port}/\n`,
+  );
   const quit = async () => {
-    stop();
+    engine.stop();
     await server.close();
     process.exit(0);
   };
