@@ -37,14 +37,16 @@ export const CLIENT_START = String.raw`
     root.textContent = "";
     var head = el("header", "top"), brand = el("div", "brand");
     brand.append(el("span", "led"), el("h1", null, "Night Shift"));
-    head.append(brand);
+    head.append(brand, watchLink());
     root.append(head);
     if (!rows.length) { root.append(el("p", "empty", "No projects yet. Add one to ~/.nightshift/projects.json.")); return; }
     var grid = el("div", "projects");
     rows.forEach(function (r) {
       var a = el("a", r.active ? "project" : "project idle");
       a.href = "/" + encodeURIComponent(r.project);
-      a.append(el("b", null, r.name || r.project), el("span", null, r.folder));
+      var title = el("b", null, r.name || r.project);
+      if (r.watch) title.append(" ", siteLight(r.watch));
+      a.append(title, el("span", null, r.folder));
       var last = r.lastAt ? "last active " + (new Date(r.lastAt).toDateString() === new Date().toDateString() ? "" : new Date(r.lastAt).toLocaleDateString([], { month: "short", day: "numeric" }) + " ") + hhmm(r.lastAt) : "no activity yet";
       a.append(el("span", null, (r.running ? r.running + " working · " : "") + (r.agents ? r.agents + (r.agents === 1 ? " agent" : " agents") + " working · " : "") + (r.open ? r.open + " open " + (r.open === 1 ? "ticket" : "tickets") + " · " : "") + last));
       grid.append(a);
@@ -74,8 +76,11 @@ export const CLIENT_START = String.raw`
     ui.connText = el("span", null, "LIVE");
     ui.conn.append(el("span", "led"), ui.connText);
     stats.append(ui.conn);
+    stats.append(watchLink());
     head.append(brand, stats);
 
+    ui.live = el("div", "livesite");
+    ui.live.hidden = true;
     ui.nowbar = el("div", "nowbar idle");
     ui.nowbar.setAttribute("aria-live", "polite");
     ui.nowTag = el("span", "tag", "NOW");
@@ -126,7 +131,10 @@ export const CLIENT_START = String.raw`
     ui.agents = el("section", "agents");
     ui.agents.setAttribute("aria-label", "Background agents");
     ui.agents.hidden = true;
-    ui.panels.board.append(floor, ui.agents);
+    ui.fromwatch = el("section", "fromwatch");
+    ui.fromwatch.setAttribute("aria-label", "From Night Watch");
+    ui.fromwatch.hidden = true;
+    ui.panels.board.append(floor, ui.fromwatch, ui.agents);
     buildTerminal(ui.panels.terminal);
     buildTimeline(ui.panels.timeline);
 
@@ -140,7 +148,7 @@ export const CLIENT_START = String.raw`
     ui.dialog = el("dialog");
     ui.dialog.setAttribute("aria-labelledby", "dlg-title");
     ui.dialog.addEventListener("click", function (e) { if (e.target === ui.dialog) ui.dialog.close(); });
-    root.append(head, ui.nowbar, tabs, ui.panels.board, ui.panels.terminal, ui.panels.timeline, keys, ui.dialog);
+    root.append(head, ui.live, ui.nowbar, tabs, ui.panels.board, ui.panels.terminal, ui.panels.timeline, keys, ui.dialog);
     var saved = null;
     try { saved = localStorage.getItem("nightshift:tab"); } catch (e) { saved = null; }
     show(ui.tabs[saved] ? saved : "board");
