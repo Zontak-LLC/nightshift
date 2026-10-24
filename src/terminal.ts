@@ -19,6 +19,19 @@ export function terminalPrinter(): (event: NightEvent) => string | null {
 // biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
 
+const TROUBLE = {
+  usage_limit: "paused: usage limit",
+  connection: "waiting on Claude: connection trouble",
+  login: "logged out: run /login",
+  api: "stopped: an API error",
+} as const;
+
+/** "⏸ paused: usage limit · resets 22:40" (the reset only when Claude Code gave one). */
+function troubleText(event: Extract<NightEvent, { kind: "session.trouble" }>): string {
+  const resets = event.resetsAt ? ` · resets ${clock(event.resetsAt).slice(0, 5)}` : "";
+  return `⏸ ${TROUBLE[event.reason]}${resets}`;
+}
+
 function lineFor(): (event: NightEvent) => string | null {
   const projectOf = new Map<string, string>();
   const titleOf = new Map<string, string>();
@@ -43,6 +56,8 @@ function lineFor(): (event: NightEvent) => string | null {
         if (titleOf.get(event.sessionId) === event.title) return null;
         titleOf.set(event.sessionId, event.title);
         return `${time}  ${project} ★ ${event.title}`;
+      case "session.trouble":
+        return `${time}  ${project} ${troubleText(event)}`;
       case "pr.link": {
         const key = `${event.sessionId}#${event.number}`;
         if (prsSeen.has(key)) return null;

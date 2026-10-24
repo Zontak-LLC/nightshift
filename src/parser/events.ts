@@ -12,6 +12,14 @@ export type NightEvent =
   | (Base & { kind: "tool.use"; toolUseId: string; tool: string; summary: string })
   | (Base & { kind: "tool.result"; toolUseId: string; ok: boolean })
   | (Base & { kind: "reply"; text: string })
-  | (Base & { kind: "pr.link"; number: number; url: string });
+  | (Base & { kind: "pr.link"; number: number; url: string })
+  /** The API refused or broke off: a usage limit (with its reset time), a lost connection, an expired login. */
+  | (Base & {
+      kind: "session.trouble";
+      reason: "usage_limit" | "connection" | "login" | "api";
+      resetsAt: string | null;
+      limitType: string | null;
+      text: string;
+    });
 
 export type ParseResult = { events: NightEvent[]; skipped: number };

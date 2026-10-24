@@ -1,6 +1,7 @@
 import type { NightEvent, ParseResult } from "./events.js";
 import { redact } from "./redact.js";
 import { toolSummary } from "./summary.js";
+import { troubleOf } from "./trouble.js";
 
 type Raw = Record<string, unknown>;
 type Block = Record<string, unknown>;
@@ -108,7 +109,13 @@ export function parseLine(line: string): ParseResult {
   const seen: NightEvent[] = raw.cwd
     ? [{ kind: "session.seen", at, sessionId, cwd: str(raw.cwd), branch: str(raw.gitBranch) || null }]
     : [];
-  const rest = type === "assistant" ? assistantEvents(raw, at, sessionId) : userEvents(raw, at, sessionId);
+  // An API error line is trouble to show (the usage limit and its reset time), not a reply.
+  const trouble = type === "assistant" ? troubleOf(raw, at, sessionId) : null;
+  const rest = trouble
+    ? [trouble]
+    : type === "assistant"
+      ? assistantEvents(raw, at, sessionId)
+      : userEvents(raw, at, sessionId);
   const events = raw.isSidechain === true ? rest.filter((e) => e.kind !== "prompt") : rest;
   const agentId = str(raw.agentId);
   const all = [...seen, ...events];
