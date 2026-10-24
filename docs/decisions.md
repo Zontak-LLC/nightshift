@@ -34,6 +34,8 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
 
 - **GitHub, open source (MIT), CI on every change** (2026-10-23, the owner).
   - **Zontak-LLC/nightshift**, public (2026-10-23, the owner): next to UseHourly and Club ADHD, same CI and Dependabot habits.
+  - **CI: GitHub Actions only, no CircleCI** (2026-10-23): nothing to deploy (it runs on each developer's computer), no
+    secrets, free for public repos. npm publishing later from GitHub Actions with trusted publishing (no stored token).
 
 ## How do we keep it clean? (guardrails)
 
