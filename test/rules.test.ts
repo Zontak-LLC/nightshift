@@ -15,9 +15,23 @@ describe("the rules catch what they claim to catch", () => {
     'rm("x")',
     "copyFileSync(a, b)",
     "createWriteStream(p)",
+    "await fsp.rm(dir)",
+    "await fs.promises.rm(dir)",
+    'await open(p, "a")',
+    "fs.writev(fd, bufs)",
     'import { spawn } from "node:child_process";',
   ])("refuses %s outside the store", (line) => {
     expect(check("src/watcher/follow.ts", line).join()).toMatch(/only src\/store/);
+  });
+
+  it("does not mistake a network response for a disk write", () => {
+    expect(check("src/server/http.ts", "res.writeHead(200);\nres.write(frame);")).toEqual([]);
+    expect(check("src/server/http.ts", "fs.write(fd, x)")).toHaveLength(1);
+    expect(check("src/server/http.ts", "await rm(dir)")).toHaveLength(1);
+  });
+
+  it("does not mistake look-alike names for disk writes", () => {
+    expect(check("src/server/x.ts", 'os.cpus(); truncate(text, 40); await open(p, "r")')).toEqual([]);
   });
 
   it("lets the store write", () => {

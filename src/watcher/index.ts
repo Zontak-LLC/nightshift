@@ -1,2 +1,4 @@
-// The watcher layer. See SPEC section 7 and CLAUDE.md.
-export {};
+// The watcher layer: follows Claude Code's session logs (read only) and hands each new line to the parser.
+
+export { type WatchOptions, watchLogs } from "./follow.js";
+export { advance, START, startAt, type TailState } from "./tail.js";

@@ -1,2 +1,2 @@
-// The server layer. See SPEC section 7 and CLAUDE.md.
-export {};
+// The server layer: Server-Sent Events and health, on localhost only.
+export { type NightServer, startServer } from "./http.js";

@@ -6,11 +6,19 @@ before changing anything; update both in the same commit when a choice changes.
 ## Layout (the layers only point one way: watcher -> parser -> store -> server -> web)
 
 - `src/parser/`: a Claude Code log line -> a Night Shift event. Pure functions; no file system, no network.
-- `src/watcher/`: follows the log folders and hands new lines to the parser. Read only.
+- `src/watcher/`: follows the log folders and hands new lines to the parser. Read only. Polls once a second
+  (`tail.ts` works in BYTES and decodes only whole lines, so a read that ends inside a character never corrupts it;
+  `follow.ts` walks `<root>/<project>/*.jsonl` and starts over when a file is replaced (new inode) or shrinks).
+  On start, files quiet for 10 minutes are followed from their end (old history is not "now"); recent ones are read
+  (the last 256 KB of a big one); a file that appears later is read from its start.
 - `src/store/`: SQLite history and the current state. The ONLY place that writes to disk.
-- `src/server/`: `/events` (Server-Sent Events) and `/state`, on localhost only.
+- `src/server/`: `/events` (Server-Sent Events, one `event: <kind>` frame per event), `/health`, later `/state`; binds
+  127.0.0.1 only and answers only a `Host` of `127.0.0.1:<port>` or `localhost:<port>` (DNS rebinding), no CORS;
+  a page that stops reading is dropped past 1 MB waiting. `res.write()` there is a network write, which the
+  disk-write rule allows. The terminal view prints control characters from logs as `�` (no escape injection).
 - `src/web/`: the page. Plain TypeScript and CSS, no framework.
-- `src/cli.ts` wires them together; `test/` holds the scenario tests and `test/fixtures/` real-shaped sample logs.
+- `src/cli.ts` wires them together (`src/terminal.ts` is the terminal view: one line per step, titles and pull
+  requests printed once per session, local time); `test/` holds the scenario tests and `test/fixtures/` real-shaped sample logs.
 
 ## Rules (checked by `npm run ci`, which CI runs on every push)
 
