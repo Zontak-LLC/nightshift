@@ -5,9 +5,14 @@
   "linter": {
     "rules": {
       "recommended": true,
-      "suspicious": { "noExplicitAny": "error", "noConsole": { "level": "error", "options": { "allow": ["error", "info"] } } },
+      "suspicious": {
+        "noExplicitAny": "error",
+        "noConsole": { "level": "error", "options": { "allow": ["error", "info"] } }
+      },
       "style": { "noNonNullAssertion": "error" },
-      "complexity": { "noExcessiveCognitiveComplexity": { "level": "error", "options": { "maxAllowedComplexity": 20 } } },
+      "complexity": {
+        "noExcessiveCognitiveComplexity": { "level": "error", "options": { "maxAllowedComplexity": 20 } }
+      },
       "correctness": { "noUnusedVariables": "error", "noUnusedImports": "error" }
     }
   }

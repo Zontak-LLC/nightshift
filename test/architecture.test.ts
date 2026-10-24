@@ -1,42 +1,51 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
+import { layerViolations } from "./layers.js";
 
-/**
- * The layers only point one way (SPEC section 7): watcher -> parser -> store -> server -> web.
- * Each layer may import only the layers listed for it. This is the main guard against a slow tangle.
- */
-const ALLOWED: Record<string, string[]> = {
-  parser: [],
-  watcher: ["parser"],
-  store: ["parser"],
-  server: ["store", "parser"],
-  web: [],
-};
-
-function sources(dir: string): string[] {
+function sources(dir: string): { path: string; text: string }[] {
   return readdirSync(dir).flatMap((name) => {
     const p = join(dir, name);
-    return statSync(p).isDirectory() ? sources(p) : /\.ts$/.test(name) ? [p] : [];
+    if (statSync(p).isDirectory()) return sources(p);
+    return /\.ts$/.test(name) ? [{ path: relative(".", p).split(sep).join("/"), text: readFileSync(p, "utf8") }] : [];
   });
 }
 
-describe("the layers only point one way", () => {
-  for (const [layer, allowed] of Object.entries(ALLOWED)) {
-    it(`${layer} imports only ${allowed.length ? allowed.join(", ") : "nothing else in src"}`, () => {
-      for (const file of sources(join("src", layer))) {
-        const imports = [...readFileSync(file, "utf8").matchAll(/from\s+["'](\.\.?\/[^"']+)["']/g)].map((m) => m[1] ?? "");
-        for (const spec of imports) {
-          const target = Object.keys(ALLOWED).find((l) => spec.includes(`../${l}/`) || spec.startsWith(`../${l}`));
-          if (target && target !== layer) expect(allowed, `${file} imports ${spec}`).toContain(target);
-        }
-      }
-    });
-  }
+describe("the layers only point one way (SPEC section 7)", () => {
+  it("holds for the real code", () => {
+    expect(layerViolations(sources("src"))).toEqual([]);
+  });
+});
 
-  it("the parser never touches the file system or the network", () => {
-    for (const file of sources(join("src", "parser"))) {
-      expect(readFileSync(file, "utf8"), file).not.toMatch(/from\s+["']node:(fs|net|http|https)/);
-    }
+// The check is only worth something if it catches bad code.
+describe("the layer check catches", () => {
+  const bad = (path: string, text: string) => layerViolations([{ path, text }]);
+
+  it.each([
+    ['import { x } from "../web/page.js";', "src/store/db.ts"],
+    ['import "../server/http.js";', "src/parser/line.ts"],
+    ['const m = await import("../store/db.js");', "src/watcher/follow.ts"],
+    ['import { run } from "../cli.js";', "src/parser/line.ts"],
+    ['import { x } from "../../src/web/page.js";', "src/store/db.ts"],
+  ])("%s in %s", (line, path) => {
+    expect(bad(path, line).length).toBe(1);
+  });
+
+  it.each([
+    'import { readFileSync } from "node:fs";',
+    'import fs from "fs";',
+    'import { DatabaseSync } from "node:sqlite";',
+  ])("a pure layer importing %s", (line) => {
+    expect(bad("src/parser/line.ts", line).length).toBe(1);
+  });
+
+  it("a pure layer calling fetch", () => {
+    expect(bad("src/web/page.ts", "await fetch('/x')").length).toBe(1);
+  });
+
+  it("but not allowed imports, or words in comments", () => {
+    expect(bad("src/watcher/follow.ts", 'import { parse } from "../parser/line.js";')).toEqual([]);
+    expect(bad("src/parser/line.ts", '// see from "../web/page.js" for the screen')).toEqual([]);
+    expect(bad("src/parser/line.ts", 'import { join } from "node:path";')).toEqual([]);
   });
 });

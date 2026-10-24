@@ -24,14 +24,14 @@ Night Shift is a free, open-source tool any developer runs on their own computer
 
 Every choice below was picked for this job, not from habit. The runner-up is named so the choice can be revisited.
 
-| Part | Choice | Why it fits | Runner-up |
-|---|---|---|---|
-| Background service | Node.js 22 + TypeScript | Good at watching files and streaming events; one language from service to screen | Go: leaner, but no real gain on one Mac |
-| Live updates | Server-Sent Events (SSE) | Updates only flow from the service to the page, which is exactly what SSE does; simpler than WebSockets | WebSockets: two-way, not needed |
-| History | SQLite, one file | Keeps every night's events, searchable, no server to run | JSON files: simple but slow to search |
-| Screen | A local web page at `http://localhost:4400` | Opens in any browser; I already design well for the web | A menu-bar app: a later stretch |
-| Hosting | None: it runs on each developer's own computer | Their agents and logs are there; private code and data never leave it | A hosted service (needs accounts and trust; not now) |
-| Code home and install | GitHub, open source (MIT), CI on every change; published to npm so `npx nightshift` runs it | Other developers can read, trust, install and improve it | A downloadable app (signing and updates are much more work) |
+| Part                  | Choice                                                                                      | Why it fits                                                                                             | Runner-up                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Background service    | Node.js 22 + TypeScript                                                                     | Good at watching files and streaming events; one language from service to screen                        | Go: leaner, but no real gain on one Mac                     |
+| Live updates          | Server-Sent Events (SSE)                                                                    | Updates only flow from the service to the page, which is exactly what SSE does; simpler than WebSockets | WebSockets: two-way, not needed                             |
+| History               | SQLite, one file                                                                            | Keeps every night's events, searchable, no server to run                                                | JSON files: simple but slow to search                       |
+| Screen                | A local web page at `http://localhost:4400`                                                 | Opens in any browser; I already design well for the web                                                 | A menu-bar app: a later stretch                             |
+| Hosting               | None: it runs on each developer's own computer                                              | Their agents and logs are there; private code and data never leave it                                   | A hosted service (needs accounts and trust; not now)        |
+| Code home and install | GitHub, open source (MIT), CI on every change; published to npm so `npx nightshift` runs it | Other developers can read, trust, install and improve it                                                | A downloadable app (signing and updates are much more work) |
 
 ## 5. What it reads (the data)
 
@@ -80,7 +80,6 @@ Claude Code log files ──► Watcher ──► Parser ──► Event store (
 ## 9. How we know it works (scenarios)
 
 Each scenario is an automated test that feeds real-shaped log lines in and checks what the page state shows.
-
 1. **A session starts:** a new log file appears; within 2 seconds "Now" shows the project, branch and "Starting".
 2. **A session works:** it reads a file, edits it, runs `npm test`; the session timeline shows Read, Edit, Command, Result in that order, with the file names and the exit status.
 3. **Two sessions at once:** two projects work at the same time; "Now" shows both, each with its own last step, never mixed.
@@ -95,7 +94,6 @@ Each scenario is an automated test that feeds real-shaped log lines in and check
 ## 10. Guardrails (quality, from the first commit)
 
 Claude writes most of the code; these keep it from drifting into a mess on a long project.
-
 1. Strict TypeScript; Biome as linter and formatter.
 2. A rules script: no `@ts-ignore`, no `any`, no TODO without a ticket number, no file writes under the Claude Code folder, no hard-coded personal paths.
 3. An architecture test that enforces the one-way layers (section 7).
@@ -108,16 +106,16 @@ Claude writes most of the code; these keep it from drifting into a mess on a lon
 
 ## 11. First week, one ticket per evening
 
-| # | Ticket | The visible win |
-|---|---|---|
-| 1 | Repo, guardrails and CI, with one passing scenario test; README that says what it is and how to run it | A green check on GitHub |
-| 2 | Parser: log line → event, with fixtures from real logs | Tests show real sessions turned into steps |
-| 3 | Watcher + `/events` stream | `curl localhost:4400/events` prints steps live while Claude works |
-| 4 | The "Now" page | A browser tab shows every running session, updating live |
-| 5 | Session timeline | Click a session, see its steps in order |
-| 6 | SQLite history + restart | Stop and start; nothing lost, nothing doubled |
-| 7 | Workflow board | The assembly line, live |
-| 8 | `npx nightshift` for anyone: find the logs on any OS, first-run screen, publish to npm | A friend can run it in one command |
+| #   | Ticket                                                                                                 | The visible win                                                   |
+| --- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| 1   | Repo, guardrails and CI, with one passing scenario test; README that says what it is and how to run it | A green check on GitHub                                           |
+| 2   | Parser: log line → event, with fixtures from real logs                                                 | Tests show real sessions turned into steps                        |
+| 3   | Watcher + `/events` stream                                                                             | `curl localhost:4400/events` prints steps live while Claude works |
+| 4   | The "Now" page                                                                                         | A browser tab shows every running session, updating live          |
+| 5   | Session timeline                                                                                       | Click a session, see its steps in order                           |
+| 6   | SQLite history + restart                                                                               | Stop and start; nothing lost, nothing doubled                     |
+| 7   | Workflow board                                                                                         | The assembly line, live                                           |
+| 8   | `npx nightshift` for anyone: find the logs on any OS, first-run screen, publish to npm                 | A friend can run it in one command                                |
 
 ## 12. Open questions
 

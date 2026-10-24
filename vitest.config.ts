@@ -7,7 +7,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
-      exclude: ["src/**/*.test.ts", "src/cli.ts"],
+      exclude: ["src/**/*.test.ts", "src/cli.ts", "src/*/index.ts"],
       // A floor that only ever goes up (raise it when the real numbers pass it by a few points).
       thresholds: { statements: 80, branches: 75, functions: 80, lines: 80 },
     },

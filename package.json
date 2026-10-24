@@ -1,8 +1,25 @@
 {
   "name": "nightshift",
   "version": "0.0.0",
+  "private": true,
   "description": "A live screen for your Claude Code agents: what they are doing now and what they did overnight. Runs on your own computer; nothing leaves it.",
+  "keywords": [
+    "claude-code",
+    "agents",
+    "agentic-coding",
+    "dashboard",
+    "cli"
+  ],
+  "author": "Denis Zontak <denis@zontakllc.com>",
   "license": "MIT",
+  "homepage": "https://github.com/Zontak-LLC/nightshift#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zontak-LLC/nightshift.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Zontak-LLC/nightshift/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -21,7 +38,8 @@
     "lint": "biome check .",
     "typecheck": "tsc --noEmit",
     "check:rules": "node scripts/check-rules.mjs",
-    "ci": "npm run check:rules && npm run lint && npm run typecheck && vitest run --coverage"
+    "ci": "npm run check:rules && npm run lint && npm run typecheck && vitest run --coverage",
+    "prepublishOnly": "npm run ci && npm run build"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.2",
