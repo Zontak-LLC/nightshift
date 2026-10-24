@@ -38,7 +38,7 @@ describe("a developer runs nightshift for the first time", () => {
 
 describe("reading the command line", () => {
   it.each([
-    [[], "help"],
+    [[], "start"],
     [["-h"], "help"],
     [["--help"], "help"],
     [["-v"], "version"],
