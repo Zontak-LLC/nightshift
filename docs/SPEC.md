@@ -47,7 +47,10 @@ Every choice below was picked for this job, not from habit. The runner-up is nam
 3. **Workflow board:** when a workflow is running, its agents as cards moving through stations (queued, working, checking, done, skipped), like the 2026-10-23 assembly line.
 4. **A board per project (the owner's choice, 2026-10-23):** each project has its own board at its own address
    (`http://localhost:4400/<project>`); open as many as you like, side by side in their own windows or tabs. One running
-   Night Shift serves them all. The start page (`http://localhost:4400/`) lists the projects with something running in
+   Night Shift serves them all. **Every board says plainly which project it shows:** the GitHub repo
+   (`Zontak-LLC/usehourly`, read from the project's git remote; the folder name when there is none), the folder
+   (`~/Projects/usehourly`) and each session's branch, in the board's header; the browser tab is titled
+   "Night Shift · usehourly" so several windows can be told apart. The start page (`http://localhost:4400/`) lists the projects with something running in
    the last 10 minutes, one click to each board; quiet projects are not listed (their runs are in History).
 5. **History:** last night's runs kept in SQLite; a "Last night" view that summarises what was done: sessions, files changed, commands run, errors.
 6. **One command to start, for anyone:** `npx nightshift` finds the Claude Code logs folder on its own (macOS, Linux and Windows locations), starts the service and opens the page. A first-run screen says what it found ("12 projects, 3 sessions running") and how to change it.
@@ -93,7 +96,7 @@ Each scenario is an automated test that feeds real-shaped log lines in and check
 2. **A session works:** it reads a file, edits it, runs `npm test`; the session timeline shows Read, Edit, Command, Result in that order, with the file names and the exit status.
 3. **Two projects at once:** two projects work at the same time; each board shows only its own project's sessions and
    steps, never mixed, and the start page lists both. A third project that was busy yesterday but is quiet now is not
-   listed.
+   listed. Each board's header and tab title name its repo (or folder), so the two windows cannot be confused.
 4. **A workflow runs:** a journal records 3 agents; the board shows them moving queued → working → done, and a skipped one in "skipped".
 5. **A broken line:** a half-written or unknown log line is skipped and counted, never crashes the service.
 6. **Restart:** stop and start Night Shift; history and current state come back from SQLite; nothing is shown twice.

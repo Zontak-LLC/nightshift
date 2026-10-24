@@ -13,6 +13,7 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
   - **OPEN: a shared team board?** Yes would need a server and accounts; no keeps it local forever.
 
 ## How are several projects shown?
+
 - **A board per project, at its own address; open several at once** (2026-10-23, the owner). One service serves them
   all; a start page lists the projects active in the last 10 minutes. Ruled out: one combined board (crowded with many
   projects).
