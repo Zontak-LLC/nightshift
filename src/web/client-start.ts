@@ -39,13 +39,14 @@ export const CLIENT_START = String.raw`
     brand.append(el("span", "led"), el("h1", null, "Night Shift"));
     head.append(brand);
     root.append(head);
-    if (!rows.length) { root.append(el("p", "empty", "No Claude Code sessions found yet. Start one and it shows here.")); return; }
+    if (!rows.length) { root.append(el("p", "empty", "No projects yet. Add one to ~/.nightshift/projects.json.")); return; }
     var grid = el("div", "projects");
     rows.forEach(function (r) {
-      var a = el("a", "project");
+      var a = el("a", r.active ? "project" : "project idle");
       a.href = "/" + encodeURIComponent(r.project);
-      a.append(el("b", null, r.project), el("span", null, r.folder));
-      a.append(el("span", null, (r.running ? r.running + " working · " : "") + (r.agents ? r.agents + (r.agents === 1 ? " agent" : " agents") + " working · " : "") + "last active " + hhmm(r.lastAt)));
+      a.append(el("b", null, r.name || r.project), el("span", null, r.folder));
+      var last = r.lastAt ? "last active " + (new Date(r.lastAt).toDateString() === new Date().toDateString() ? "" : new Date(r.lastAt).toLocaleDateString([], { month: "short", day: "numeric" }) + " ") + hhmm(r.lastAt) : "no activity yet";
+      a.append(el("span", null, (r.running ? r.running + " working · " : "") + (r.agents ? r.agents + (r.agents === 1 ? " agent" : " agents") + " working · " : "") + (r.open ? r.open + " open " + (r.open === 1 ? "ticket" : "tickets") + " · " : "") + last));
       grid.append(a);
     });
     root.append(grid);

@@ -21,8 +21,8 @@ export const CLIENT_END = String.raw`  // ---- the usage meters in the header: 1
 
   function renderTop(view) {
     renderMeters(view.meter);
-    document.title = "Night Shift · " + view.project;
-    ui.title.textContent = "Night Shift · " + view.project;
+    document.title = "Night Shift · " + (view.name || view.project);
+    ui.title.textContent = "Night Shift · " + (view.name || view.project);
     ui.where.textContent = [view.repo, view.folder, view.branch].filter(Boolean).join(" · ");
     var run = view.run, tot = run ? shiftTotals(run.columns) : null;
     ui.stats.done.value.textContent = tot ? tot.done + " / " + tot.total : "–";

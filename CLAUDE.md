@@ -33,6 +33,9 @@ before changing anything; update both in the same commit when a choice changes.
   `agent.task`, `agent.title` and `turn.end`. `store/workers.ts` keeps one worker per agent id that is not a pipeline
   agent and files it by the repository most of its paths belong to (`store/root.ts`, worktree = its main repo); `Board`
   exposes `view().agents`, `projects()[].agents` and `agentLabel()` (the terminal's tag). See decisions.md.
+- Projects everywhere (ticket 8): `store/places.ts` files each main-session step by the repositories its paths belong to
+  (a session shows on every repo it works in); `store/pinned.ts` reads `~/.nightshift/projects.json` and builds the start
+  page tiles (pinned always, recent repos under `~/Projects` added, idle dimmer). See decisions.md.
 - Trouble (ticket 5): `parser/trouble.ts` turns Claude Code's `isApiErrorMessage` lines into `session.trouble` (reason,
   `resetsAt`, limit type); the board keeps it on the session or the agent's ticket until the next real step and lists it
   as `alerts` in the view; the page's NOW strip shows the newest one in amber; a late step of a finished ticket only fills in its times.

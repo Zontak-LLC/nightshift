@@ -113,3 +113,30 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
   two 10-segment bars; amber from 75% and red from 90% (the owner's warning line); grey "stale" after 15 minutes;
   hidden without the file. The page works out staleness with its own clock, so a file that stops updating turns grey
   without any new push.
+
+## Projects everywhere (ticket 8, 2026-10-24)
+
+- **The owner's problem:** "add the Loader project here too". All Loader work (folder `magsmith`) happened in sessions
+  started in another folder, and the board filed a session only under the folder it started in, so Loader never showed.
+- **Main-session steps are attributed per step, with the rule of ticket 7.** Each tool call is filed by the repositories
+  its paths belong to (`parser/paths.ts`, `store/root.ts`; a worktree counts as its main repository). A call with no
+  path stays with the session's own folder; a call that touches two repositories counts in both. A session therefore
+  shows on the board of every repository it worked in, with only the steps that worked there (`store/places.ts`), and
+  its own project still lists it. Same limits as ticket 7: `npm test` after an earlier `cd` names no folder, so it
+  stays at home. **Pipelines (workflow runs) stay with the project the session started in**: their tickets are not
+  split (a run is one unit).
+- **A fixed project list on the start page** (`store/pinned.ts`). `~/.nightshift/projects.json` is a list of
+  `{ path, name }`; it is created with four defaults when missing (Loader = `~/Projects/magsmith`, UseHourly, Night
+  Watch, Night Shift). Pinned projects show even when idle (dimmer, after the busy ones, kept in file order). Other
+  git repositories directly under `~/Projects` with Claude activity in the last 30 days are added by themselves, and
+  any other project that is busy right now stays visible. To remove an auto-added repo, add
+  `{ "path": "~/Projects/x", "hide": true }` to the file (the file is never rewritten after it exists).
+  The display name is for people (tile and board title); the board address keeps the folder name (`/magsmith`).
+  Each tile shows the last active time (from the history), agents and tickets working, and the open tickets of the
+  newest pipeline run. "Busy" = a working ticket or agent, or a step in the last 10 minutes.
+- **A damaged file never stops Night Shift:** invalid JSON, not a list, or a line without a `path` means the defaults
+  are used and one line is printed in the log (`projects.json is not usable ... using the defaults`). The file is read
+  again on every push, so an edit shows without a restart. Ruled out: a settings screen (SPEC section 3.7).
+- **Limits (said plainly):** a project is its folder name, so two repositories with the same folder name share one board
+  and one tile (as for agents). A session that started in a worktree or a subfolder belongs to its main repository.
+  A usage-limit pause shows on every repository the session touched.

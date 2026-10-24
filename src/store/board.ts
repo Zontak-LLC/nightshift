@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import { type NightEvent, type RunEvent, titleInLabel } from "../parser/index.js";
 import { columnsOf, newTicket, widenTimes } from "./columns.js";
+import { type NowRow, nowRows, placeStep, type Spot } from "./places.js";
 import { type RootOf, repoRootOf } from "./root.js";
 import { type Alert, alertsOf, pauseTicket, type Trouble, troubleFrom } from "./trouble.js";
 import { type AgentRow, Workers } from "./workers.js";
@@ -29,11 +30,14 @@ export type Ticket = {
 };
 type Session = {
   cwd: string;
+  /** The repository the session started in (a subfolder or worktree counts as its main repository), else the cwd. */
+  home: string;
   branch: string | null;
   title: string | null;
-  step: string | null;
   lastAt: string;
   trouble: Trouble | null;
+  /** Where the session's steps went, by project (its own folder, and any other repository it worked in). */
+  places: Map<string, Spot>;
 };
 type Helper = { label: string; step: string | null; lastAt: string; active: boolean };
 type Run = {
@@ -46,7 +50,8 @@ type Run = {
   /** The order of its latest activity of any kind (journal lines carry no time), so the newest run is shown. */
   seen: number;
 };
-export type NowRow = { who: string; what: string; at: string };
+
+export type { NowRow } from "./places.js";
 export type BoardView = {
   project: string;
   folder: string | null;
@@ -57,7 +62,16 @@ export type BoardView = {
   alerts: Alert[];
   run: { runId: string; startedAt: string | null; lastAt: string; columns: Record<Station, Ticket[]> } | null;
 };
-export type ProjectRow = { project: string; folder: string; lastAt: string; running: number; agents: number };
+export type ProjectRow = {
+  project: string;
+  folder: string;
+  lastAt: string;
+  running: number;
+  agents: number;
+  /** Tickets of the newest pipeline run that are not finished (queued, working or checking). */
+  open: number;
+};
+const ownProject = (s: Session) => basename(s.home) || s.home;
 
 /** Steps that mean "checking the work" rather than writing it. */
 const CHECKING = /\b(npm run ci|npm test|vitest|playwright|e2e|gh pr checks|gh run watch|biome check|tsc)\b/i;
@@ -73,7 +87,7 @@ export class Board {
   private clock = 0;
   private workers: Workers;
 
-  constructor(rootOf: RootOf = repoRootOf) {
+  constructor(private readonly rootOf: RootOf = repoRootOf) {
     this.workers = new Workers(rootOf, (id) => this.sessions.get(id)?.cwd ?? null);
   }
 
@@ -94,18 +108,19 @@ export class Board {
     if (e.kind === "session.seen") {
       this.sessions.set(e.sessionId, {
         cwd: e.cwd,
+        home: this.rootOf(e.cwd)?.root ?? e.cwd,
         branch: e.branch,
         title: s?.title ?? null,
-        step: s?.step ?? null,
         lastAt: later(s?.lastAt ?? "", e.at),
         trouble: s?.trouble ?? null,
+        places: s?.places ?? new Map(),
       });
       return true;
     }
     if (!s) return false;
     s.lastAt = later(s.lastAt, e.at);
     if (e.kind === "tool.use") {
-      s.step = e.summary;
+      placeStep(s.places, s.home, e.paths ?? [], this.rootOf, e.summary, e.at);
       s.trouble = null; // real work again: the trouble is over
     } else if (e.kind === "reply" || e.kind === "prompt") {
       if (!s.trouble) return false;
@@ -203,40 +218,56 @@ export class Board {
     return true;
   }
 
-  /** The projects with a session, most recently active first. */
+  /** The newest pipeline run of the sessions that started in a project. */
+  private runOf(ids: Set<string>): Run | null {
+    return [...this.runs.values()].filter((r) => ids.has(r.sessionId)).sort((a, b) => b.seen - a.seen)[0] ?? null;
+  }
+
+  /** The projects with a session or a step in them (any session may work in several), newest first. */
   projects(nowMs = Date.now()): ProjectRow[] {
     const rows = new Map<string, ProjectRow>();
+    const row = (project: string, folder: string) => {
+      const r = rows.get(project) ?? { project, folder, lastAt: "", running: 0, agents: 0, open: 0 };
+      rows.set(project, r);
+      return r;
+    };
     for (const [id, s] of this.sessions) {
-      const project = basename(s.cwd) || s.cwd;
-      const row = rows.get(project) ?? { project, folder: s.cwd, lastAt: "", running: 0, agents: 0 };
-      row.lastAt = later(row.lastAt, s.lastAt);
+      const own = row(ownProject(s), s.home);
+      own.lastAt = later(own.lastAt, s.lastAt);
       for (const run of this.runs.values()) {
         if (run.sessionId !== id) continue;
-        row.lastAt = later(row.lastAt, run.lastAt);
-        row.running += [...run.tickets.values()].filter(
+        own.lastAt = later(own.lastAt, run.lastAt);
+        own.running += [...run.tickets.values()].filter(
           (t) => t.station === "working" || t.station === "checking",
         ).length;
       }
-      rows.set(project, row);
+      for (const [project, spot] of s.places) {
+        const r = row(project, spot.folder);
+        r.lastAt = later(r.lastAt, spot.lastAt);
+      }
     }
     for (const [project, w] of this.workers.projects(nowMs, (id) => this.agents.has(id))) {
-      const row = rows.get(project) ?? { project, folder: w.folder, lastAt: "", running: 0, agents: 0 };
-      row.lastAt = later(row.lastAt, w.lastAt);
-      row.agents = w.agents;
-      rows.set(project, row);
+      const r = row(project, w.folder);
+      r.lastAt = later(r.lastAt, w.lastAt);
+      r.agents = w.agents;
+    }
+    for (const r of rows.values()) {
+      const ids = new Set([...this.sessions].filter(([, s]) => ownProject(s) === r.project).map(([id]) => id));
+      const run = this.runOf(ids);
+      r.open = [...(run?.tickets.values() ?? [])].filter((t) => !["done", "skipped"].includes(t.station)).length;
     }
     return [...rows.values()].sort((a, b) => b.lastAt.localeCompare(a.lastAt));
   }
 
   /** One project's board: its newest session's place, what is happening now, and its newest pipeline run. */
   view(project: string, nowMs = Date.now()): BoardView {
-    const mine = [...this.sessions].filter(([, s]) => (basename(s.cwd) || s.cwd) === project);
+    // A session shows on its own project's board and on every other repository it worked in (its steps split).
+    const mine = [...this.sessions].filter(([, s]) => ownProject(s) === project || s.places.has(project));
     mine.sort(([, a], [, b]) => b.lastAt.localeCompare(a.lastAt));
-    const newest = mine[0]?.[1];
+    const own = mine.filter(([, s]) => ownProject(s) === project);
+    const newest = own[0]?.[1];
     const agents = this.workers.rows(project, nowMs, (id) => this.agents.has(id));
-    const ids = new Set(mine.map(([id]) => id));
-    const runs = [...this.runs.values()].filter((r) => ids.has(r.sessionId)).sort((a, b) => b.seen - a.seen);
-    const run = runs[0] ?? null;
+    const run = this.runOf(new Set(own.map(([id]) => id))); // pipelines stay with the project they started in
     const alerts = alertsOf(
       mine.map(([, s]) => s),
       run?.tickets.values() ?? [],
@@ -244,10 +275,15 @@ export class Board {
     const now = nowRows(
       mine.map(([, s]) => s),
       run,
+      project,
     );
     return {
       project,
-      folder: newest?.cwd ?? this.workers.projects(nowMs).get(project)?.folder ?? null,
+      folder:
+        newest?.cwd ??
+        mine[0]?.[1].places.get(project)?.folder ??
+        this.workers.projects(nowMs).get(project)?.folder ??
+        null,
       branch: newest?.branch ?? null,
       now: now.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6),
       agents,
@@ -255,19 +291,4 @@ export class Board {
       run: run && { runId: run.runId, startedAt: run.startedAt, lastAt: run.lastAt, columns: columnsOf(run) },
     };
   }
-}
-
-/** What is happening now: the sessions' own steps, the pipeline's helper steps and its tickets in progress. */
-function nowRows(sessions: Session[], run: Run | null): NowRow[] {
-  const now: NowRow[] = [];
-  for (const s of sessions) if (s.step) now.push({ who: s.title ?? "Session", what: s.step, at: s.lastAt });
-  for (const h of run?.helpers.values() ?? []) {
-    if (h.active) now.push({ who: h.label, what: h.step ?? "Starting", at: h.lastAt });
-  }
-  for (const t of run?.tickets.values() ?? []) {
-    if (t.station === "working" || t.station === "checking") {
-      now.push({ who: `#${t.number}`, what: t.step ?? "Starting", at: t.finishedAt ?? "" });
-    }
-  }
-  return now;
 }

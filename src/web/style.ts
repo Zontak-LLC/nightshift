@@ -177,6 +177,8 @@ dialog::backdrop { background: rgba(10,11,14,.72); }
 .projects { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .project { display: grid; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; text-decoration: none; color: var(--fg); }
 .project:hover { border-color: var(--live); }
+.project.idle { opacity: .6; }
+.project.idle:hover { opacity: 1; }
 .project b { font: 600 17px var(--sans); color: var(--strong); }
 .project span { font: 12.5px var(--mono); color: var(--muted); }
 

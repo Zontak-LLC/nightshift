@@ -2,12 +2,12 @@
 // The `nightshift` command: wires the watcher to the server and the terminal. See CLAUDE.md for the layers.
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { startEngine } from "./engine.js";
 import { startMeter } from "./meter.js";
 import type { NightEvent, RunEvent } from "./parser/index.js";
 import { startServer } from "./server/index.js";
-import { DEFAULT_KEEP_DAYS, repoOf } from "./store/index.js";
+import { DEFAULT_KEEP_DAYS, expand, loadPinned, projectTiles, repoOf } from "./store/index.js";
 import { terminalPrinter } from "./terminal.js";
 import { parseArgs, usage } from "./usage.js";
 
@@ -35,14 +35,25 @@ async function start(): Promise<void> {
   });
   const { board } = engine;
   const meter = startMeter(process.env.NIGHTSHIFT_USAGE || join(homedir(), ".claude", "usage-now.json"));
+  const pinnedFile = join(dataDir, "projects.json");
+  let lastWarning = "";
+  const warn = (message: string) => {
+    if (message === lastWarning) return; // the list is read on every push; say a problem once
+    lastWarning = message;
+    console.error(`nightshift: ${message}`);
+  };
+  const tiles = () =>
+    projectTiles(board.projects(), loadPinned(pinnedFile, warn), { home: homedir(), nowMs: Date.now() });
   const server = await startServer(Number(process.env.NIGHTSHIFT_PORT) || 4400, {
     view: (project) => {
       const view = board.view(project);
       const home = homedir();
       const folder = view.folder?.startsWith(home) ? `~${view.folder.slice(home.length)}` : view.folder;
-      return { ...view, folder, repo: view.folder ? repoOf(view.folder) : null, meter: meter.current() };
+      const name =
+        loadPinned(pinnedFile, warn).find((p) => basename(expand(p.path, homedir())) === project)?.name ?? project;
+      return { ...view, name, folder, repo: view.folder ? repoOf(view.folder) : null, meter: meter.current() };
     },
-    projects: () => board.projects(),
+    projects: tiles,
   });
   publish = server.publish;
   setInterval(server.refresh, 30_000).unref(); // the meter changes without any event

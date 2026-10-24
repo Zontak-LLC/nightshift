@@ -177,6 +177,7 @@ Claude writes most of the code; these keep it from drifting into a mess on a lon
 
 ## 13. Change log
 
+- 0.8 (2026-10-24): a session shows on every repository it works in (steps split by where they work), and the start page lists a fixed project list from `~/.nightshift/projects.json` (idle ones dimmer), plus recently used repos under `~/Projects`.
 - 0.7 (2026-10-24): background agents (subagents) are followed and filed under the project they really work in (section 5b, scenario 11).
 - 0.1 (2026-10-23): first draft from the conversation: Claude Code logs only in v1, GitHub with CI, Node.js + TypeScript, SSE, SQLite, local page, Rule 1 and the guardrails.
 - 0.6 (2026-10-24): the board takes the first design's layout (header totals, NOW strip, Board, Terminal and Timeline tabs) in the readable palette (section 8).
