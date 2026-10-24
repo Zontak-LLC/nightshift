@@ -71,4 +71,14 @@ clear repository it stays under its parent's project. The board shows them under
 "3 agents working", the Terminal tab streams their steps tagged with the agent's name, and the Timeline draws a bar
 for each. The start page lists projects that only helpers touched.
 
+### Projects
+
+A session is filed by where its steps work, not only by the folder it started in: a session started in `usehourly` that edits files in `magsmith` shows on the `magsmith` board too (steps split per repository; a step that names no folder stays at home). The start page shows a fixed list from `~/.nightshift/projects.json`, created on first run:
+
+```json
+[{ "path": "~/Projects/magsmith", "name": "Loader" }, { "path": "~/Projects/usehourly", "name": "UseHourly" }]
+```
+
+`name` is what the tile and the board title say; the board address uses the folder name. Idle projects stay on the page, dimmer. Git repos directly under `~/Projects` with Claude activity in the last 30 days are added by themselves; add `{ "path": "~/Projects/x", "hide": true }` to remove one. A damaged file falls back to the defaults and says so in the log.
+
 MIT licence.
