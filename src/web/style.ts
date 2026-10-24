@@ -31,6 +31,7 @@ a { color: var(--live); }
 .field { color: var(--fg); }
 .date { font: 13px var(--sans); color: var(--muted); }
 .message { font: 13px var(--mono); color: var(--fg); padding: 2px 2px 0; }
+.message.alert { color: var(--warn); font-weight: 600; }
 .status-left { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; min-width: 0; }
 .status-right { display: flex; align-items: center; gap: 18px; }
 .brand { font: 600 13px var(--sans); letter-spacing: .14em; color: var(--muted); }

@@ -11,8 +11,9 @@ export const CLIENT_END = String.raw`  function paint(t, place, instant) {
     c.querySelector(".name").textContent = t.title;
     // No step for 30 minutes (a stopped or crashed agent): say so instead of looking busy.
     var quiet = (t.station === "working" || t.station === "checking") && t.finishedAt && Date.now() - new Date(t.finishedAt).getTime() > 30 * 60000;
-    var step = c.querySelector(".step"), text = quiet ? "Quiet since " + hhmm(t.finishedAt) : t.station === "checking" ? "Checking: " + (t.step || "") : t.step || "Starting";
-    c.classList.toggle("quiet", Boolean(quiet));
+    var paused = t.trouble && (t.station === "working" || t.station === "checking");
+    var step = c.querySelector(".step"), text = paused ? troubleLine(t.trouble) : quiet ? "Quiet since " + hhmm(t.finishedAt) : t.station === "checking" ? "Checking: " + (t.step || "") : t.step || "Starting";
+    c.classList.toggle("quiet", Boolean(quiet || paused));
     if (step.textContent !== text) { step.textContent = text; if (!instant) restart(step, "in"); }
     var code = c.querySelector(".code"), want = t.station === "done" || t.station === "skipped" ? codeOf(t) : "";
     if (want && !code) { code = el("span", "code"); c.append(code); }
@@ -28,7 +29,26 @@ export const CLIENT_END = String.raw`  function paint(t, place, instant) {
   }
 
   /** The message line: the state of the run in one plain sentence. */
+  /** Trouble in plain words, with the reset time and how long until it for a usage limit. */
+  var WHY = { usage_limit: "Paused: usage limit", connection: "Waiting on Claude: connection trouble", login: "Logged out: run /login in Claude Code", api: "Stopped: an API error" };
+  function troubleLine(tr) {
+    var line = (WHY[tr.reason] || WHY.api) + " since " + hhmm(tr.since);
+    if (tr.resetsAt) {
+      var mins = Math.round((new Date(tr.resetsAt).getTime() - Date.now()) / 60000);
+      // Once the reset has passed, an interactive session waits for the person: say so instead of promising.
+      line += mins > 0
+        ? " · resets " + hhmm(tr.resetsAt) + " (in " + (mins >= 60 ? Math.floor(mins / 60) + " h " : "") + (mins % 60) + " min)"
+        : " · reset passed at " + hhmm(tr.resetsAt) + ": send a message to continue";
+    }
+    return line;
+  }
+
   function messageFor(view) {
+    var alert = view.alerts && view.alerts[0];
+    if (alert) {
+      var waiting = alert.reason === "usage_limit" && alert.resetsAt && new Date(alert.resetsAt).getTime() > Date.now();
+      return troubleLine(alert) + (waiting ? ". Nothing is lost; it can continue after the reset." : ".");
+    }
     var run = view.run;
     if (!run) return "No pipeline in this project. Sessions show under Now.";
     var c = run.columns, busy = c.working.concat(c.checking).map(function (t) { return "#" + t.number; });
@@ -59,7 +79,9 @@ export const CLIENT_END = String.raw`  function paint(t, place, instant) {
       field.append(el("b", null, f[0]), " " + f[1]);
       where.append(field);
     });
-    root.querySelector(".message").textContent = messageFor(view);
+    var message = root.querySelector(".message");
+    message.textContent = messageFor(view);
+    message.classList.toggle("alert", Boolean(view.alerts && view.alerts.length));
     var active = document.activeElement && document.activeElement.closest ? document.activeElement.closest(".card") : null;
     var keep = active ? Number(active.dataset.num) : null;
     var before = new Map();

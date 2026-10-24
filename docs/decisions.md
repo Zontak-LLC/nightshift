@@ -61,6 +61,15 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
 - **The page asks for nothing:** the server pushes each open board its whole state over the stream (at most every 300 ms),
   so a reconnecting page is at once up to date, and the web layer never calls `fetch`.
 
+## How do we know work has stopped? (ticket 5, 2026-10-24)
+
+- **From Claude Code's own error lines**, read in the user's real logs: an assistant line with `isApiErrorMessage: true`
+  and a structured `error` field. `rate_limit` (HTTP 429) = the usage limit, with `quotaLimits.resetsAt` (Unix seconds)
+  and `rateLimitType` (for example `five_hour`); `server_error` = a lost connection or the computer slept;
+  `authentication_failed` = the login expired. The sentence ("You've hit your session limit · resets 8:40pm") is only
+  shown, never parsed. Ruled out: guessing from silence alone (a quiet ticket still shows "Quiet since" after 30 min).
+- **A pause lasts until the next real step** of that session or agent, so the board clears by itself when work resumes.
+
 ## How do we keep it clean? (guardrails)
 
 - Strict TypeScript, Biome, a rules script (no ts-ignore, TODO needs a ticket, no personal paths, only `src/store/`

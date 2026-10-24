@@ -24,6 +24,9 @@ before changing anything; update both in the same commit when a choice changes.
   turns them into stations: a checking step (`npm run ci`, playwright, ...) means Checking; a result means Done or
   Skipped (`skipped`, `blocked`, ...). The CLI adds the repo name (`store/repo.ts`, from `.git/config`) and shows the
   home folder as `~`.
+- Trouble (ticket 5): `parser/trouble.ts` turns Claude Code's `isApiErrorMessage` lines into `session.trouble` (reason,
+  `resetsAt`, limit type); the board keeps it on the session or the agent's ticket until the next real step and lists it
+  as `alerts` in the view; the page's message line shows the newest one in amber.
 - `src/cli.ts` wires them together (`src/terminal.ts` is the terminal view: one line per step, titles and pull
   requests printed once per session, local time); `test/` holds the scenario tests and `test/fixtures/` real-shaped sample logs.
 

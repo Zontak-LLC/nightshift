@@ -1,5 +1,6 @@
 import { basename } from "node:path";
 import { type NightEvent, type RunEvent, titleInLabel } from "../parser/index.js";
+import { type Alert, alertsOf, pauseTicket, type Trouble, troubleFrom } from "./trouble.js";
 
 /**
  * The board's live state, built from events alone (no clock, no disk): a session's place and current step, and each
@@ -21,8 +22,16 @@ export type Ticket = {
   queueIndex: number;
   /** The agent working on it now: a late result from an earlier agent (a restarted ticket) is ignored. */
   agentId: string | null;
+  trouble: Trouble | null;
 };
-type Session = { cwd: string; branch: string | null; title: string | null; step: string | null; lastAt: string };
+type Session = {
+  cwd: string;
+  branch: string | null;
+  title: string | null;
+  step: string | null;
+  lastAt: string;
+  trouble: Trouble | null;
+};
 type Helper = { label: string; step: string | null; lastAt: string; active: boolean };
 type Run = {
   runId: string;
@@ -40,6 +49,7 @@ export type BoardView = {
   folder: string | null;
   branch: string | null;
   now: NowRow[];
+  alerts: Alert[];
   run: { runId: string; startedAt: string | null; lastAt: string; columns: Record<Station, Ticket[]> } | null;
 };
 export type ProjectRow = { project: string; folder: string; lastAt: string; running: number };
@@ -72,13 +82,20 @@ export class Board {
         title: s?.title ?? null,
         step: s?.step ?? null,
         lastAt: later(s?.lastAt ?? "", e.at),
+        trouble: s?.trouble ?? null,
       });
       return true;
     }
     if (!s) return false;
     s.lastAt = later(s.lastAt, e.at);
-    if (e.kind === "tool.use") s.step = e.summary;
-    else if (e.kind === "session.title") s.title = e.title;
+    if (e.kind === "tool.use") {
+      s.step = e.summary;
+      s.trouble = null; // real work again: the trouble is over
+    } else if (e.kind === "reply" || e.kind === "prompt") {
+      if (!s.trouble) return false;
+      s.trouble = null; // the conversation goes on (a text-only answer counts): the trouble is over
+    } else if (e.kind === "session.title") s.title = e.title;
+    else if (e.kind === "session.trouble") s.trouble = troubleFrom(e);
     else return false;
     return true;
   }
@@ -86,7 +103,9 @@ export class Board {
   private applyAgentStep(e: NightEvent, agentId: string): boolean {
     const where = this.agents.get(agentId);
     const run = where && this.runs.get(where.runId);
-    if (!where || !run || e.kind !== "tool.use") return false;
+    if (!where || !run) return false;
+    if (e.kind === "session.trouble") return where.number !== null && pauseTicket(run.tickets.get(where.number), e);
+    if (e.kind !== "tool.use") return false;
     run.lastAt = later(run.lastAt, e.at);
     run.seen = ++this.clock;
     run.startedAt ??= e.at || null;
@@ -98,6 +117,7 @@ export class Board {
     const t = run.tickets.get(where.number);
     if (!t || t.station === "done" || t.station === "skipped") return false;
     t.step = e.summary;
+    t.trouble = null; // real work again: the trouble is over
     t.steps++;
     t.recent = [...t.recent, e.summary].slice(-RECENT);
     t.startedAt ??= e.at || null;
@@ -143,7 +163,15 @@ export class Board {
       }
       const t = run.tickets.get(e.number) ?? newTicket(e.number, titleInLabel(e.label), run.tickets.size);
       // A ticket started again (a resumed run) goes back to work and loses its old result.
-      Object.assign(t, { station: "working", status: null, pr: null, summary: null, step: null, agentId: e.agentId });
+      Object.assign(t, {
+        station: "working",
+        status: null,
+        pr: null,
+        summary: null,
+        step: null,
+        agentId: e.agentId,
+        trouble: null,
+      });
       run.tickets.set(e.number, t);
       return true;
     }
@@ -152,7 +180,7 @@ export class Board {
     const number = this.agents.get(e.agentId)?.number ?? e.number;
     const t = number === null ? undefined : run.tickets.get(number);
     if (!t || (t.agentId && t.agentId !== e.agentId)) return Boolean(helper);
-    Object.assign(t, { status: e.status, pr: e.pr, summary: e.summary, step: null });
+    Object.assign(t, { status: e.status, pr: e.pr, summary: e.summary, step: null, trouble: null });
     t.station = e.status && SKIPPED.test(e.status) ? "skipped" : "done";
     return true;
   }
@@ -184,6 +212,10 @@ export class Board {
     const ids = new Set(mine.map(([id]) => id));
     const runs = [...this.runs.values()].filter((r) => ids.has(r.sessionId)).sort((a, b) => b.seen - a.seen);
     const run = runs[0] ?? null;
+    const alerts = alertsOf(
+      mine.map(([, s]) => s),
+      run?.tickets.values() ?? [],
+    );
     const now = nowRows(
       mine.map(([, s]) => s),
       run,
@@ -193,6 +225,7 @@ export class Board {
       folder: newest?.cwd ?? null,
       branch: newest?.branch ?? null,
       now: now.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6),
+      alerts,
       run: run && { runId: run.runId, startedAt: run.startedAt, lastAt: run.lastAt, columns: columnsOf(run) },
     };
   }
@@ -228,6 +261,7 @@ function newTicket(number: number, title: string, queueIndex: number): Ticket {
     summary: null,
     queueIndex,
     agentId: null,
+    trouble: null,
   };
 }
 

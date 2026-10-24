@@ -95,6 +95,20 @@ Claude Code log files ──► Watcher ──► Parser ──► Event store (
   the status light's slow blink. Reduced motion turns all of it off.
 - No brown, no glow, no pure black.
 
+## 8b. When things go wrong
+
+The board never looks busy while nothing happens. The message line turns amber and says it in words, with the next step:
+
+| What happens                         | What the board says                                                                                      |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Usage limit                          | "Paused: usage limit since 21:40 · resets 22:40 (in 58 min). Nothing is lost; work continues by itself." |
+| Connection lost, computer slept      | "Waiting on Claude: connection trouble since 21:40."                                                     |
+| Login expired                        | "Logged out: run /login in Claude Code since 21:40."                                                     |
+| A ticket with no step for 30 minutes | "Quiet since 21:40" on its card                                                                          |
+| The page loses Night Shift           | The status light turns amber: "RECONNECTING…"                                                            |
+
+A paused ticket says so on its card. Each notice clears by itself at the next real step.
+
 ## 9. How we know it works (scenarios)
 
 Each scenario is an automated test that feeds real-shaped log lines in and checks what the page state shows.
