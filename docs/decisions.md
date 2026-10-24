@@ -47,6 +47,20 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
   - **CI: GitHub Actions only, no CircleCI** (2026-10-23): nothing to deploy (it runs on each developer's computer), no
     secrets, free for public repos. npm publishing later from GitHub Actions with trusted publishing (no stored token).
 
+## How does the board look? (2026-10-24, the owner, after trying several)
+
+- **Readable for hours:** a dark grey-blue page (`#16181d`), never pure black; soft off-white text (`#d4d7dd`, about 12:1),
+  never pure white; a quieter grey for secondary text; thin quiet lines. Colour only with a meaning: blue = live,
+  green = done, amber = needs attention. Sans for titles, monospace only for machine output.
+  - Ruled out: phosphor green on black (tiring after a while), lavender on charcoal with gaps between boxes (busy),
+    glow and scan lines (decoration).
+- **Layout like CICS and Norton Commander:** a top line (title, date, time, status light), labelled fields (REPO, FOLDER,
+  BRANCH), framed areas with the title in the frame, a plain-words message line, a Key=Action line. Function first:
+  anything that is only decoration is dropped.
+- **Fonts on the computer only:** the page loads nothing from the internet (no web fonts), so nothing leaves it.
+- **The page asks for nothing:** the server pushes each open board its whole state over the stream (at most every 300 ms),
+  so a reconnecting page is at once up to date, and the web layer never calls `fetch`.
+
 ## How do we keep it clean? (guardrails)
 
 - Strict TypeScript, Biome, a rules script (no ts-ignore, TODO needs a ticket, no personal paths, only `src/store/`

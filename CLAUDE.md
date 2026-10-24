@@ -16,7 +16,14 @@ before changing anything; update both in the same commit when a choice changes.
   127.0.0.1 only and answers only a `Host` of `127.0.0.1:<port>` or `localhost:<port>` (DNS rebinding), no CORS;
   a page that stops reading is dropped past 1 MB waiting. `res.write()` there is a network write, which the
   disk-write rule allows. The terminal view prints control characters from logs as `�` (no escape injection).
-- `src/web/`: the page. Plain TypeScript and CSS, no framework.
+- `src/web/`: the page, sent as text by the server (`page.ts`, `style.ts`, `client-start.ts` + `client-end.ts` = one
+  script). It asks the server for nothing: `/events?project=<name>` pushes the whole board (`event: board`), `?project=`
+  the project list. Every value from the logs is set with `textContent`. No web fonts or other outside loads.
+- Pipelines: the watcher also follows `<session>/subagents/workflows/<run>/journal.jsonl` (read whole: the run's ticket
+  list, parsed by `parser/journal.ts`) and each `agent-*.jsonl` (its steps carry `agentId`). `store/board.ts` (`Board`)
+  turns them into stations: a checking step (`npm run ci`, playwright, ...) means Checking; a result means Done or
+  Skipped (`skipped`, `blocked`, ...). The CLI adds the repo name (`store/repo.ts`, from `.git/config`) and shows the
+  home folder as `~`.
 - `src/cli.ts` wires them together (`src/terminal.ts` is the terminal view: one line per step, titles and pull
   requests printed once per session, local time); `test/` holds the scenario tests and `test/fixtures/` real-shaped sample logs.
 

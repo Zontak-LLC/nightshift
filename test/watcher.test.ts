@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, renameSync, rmSync, utimesSync,
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { NightEvent } from "../src/parser/index.js";
+import type { NightEvent, RunEvent } from "../src/parser/index.js";
 import { advance, START, startAt, watchLogs } from "../src/watcher/index.js";
 
 const line = (o: Record<string, unknown>) =>
@@ -148,5 +148,39 @@ describe("a developer runs Claude Code while Night Shift watches", () => {
     });
     expect(await until(() => seen.length === 2)).toBe(true);
     expect(errors).toHaveLength(1);
+  });
+
+  it("follows a pipeline: its journal (always from the start) and each agent's own log, tagged with the agent", async () => {
+    dir = mkdtempSync(join(tmpdir(), "nightshift-"));
+    const run = join(dir, "demo-app", "s-demo-1", "subagents", "workflows", "wf_demo");
+    mkdirSync(run, { recursive: true });
+    writeFileSync(join(dir, "demo-app", "s-demo-1.jsonl"), toolUse("t0", "main.ts"));
+    writeFileSync(
+      join(run, "journal.jsonl"),
+      `${JSON.stringify({ type: "started", agentId: "agent-13", label: "#13 Dark mode toggle" })}\n`,
+    );
+    const old = new Date(Date.now() - 60 * 60_000);
+    utimesSync(join(run, "journal.jsonl"), old, old); // even a quiet journal is read whole: it is the run's ticket list
+    writeFileSync(
+      join(run, "agent-agent-13.jsonl"),
+      line({
+        type: "assistant",
+        agentId: "agent-13",
+        isSidechain: true,
+        message: {
+          content: [{ type: "tool_use", id: "x1", name: "Edit", input: { file_path: "/work/demo-app/header.tsx" } }],
+        },
+      }),
+    );
+    const runs: RunEvent[] = [];
+    const steps: NightEvent[] = [];
+    stop = watchLogs({ root: dir, everyMs: 50, onEvent: (e) => steps.push(e), onRun: (e) => runs.push(e) });
+    expect(
+      await until(() => runs.length > 0 && steps.some((e) => e.kind === "tool.use" && e.agentId === "agent-13")),
+    ).toBe(true);
+    expect(runs[0]).toMatchObject({ kind: "agent.started", runId: "wf_demo", sessionId: "s-demo-1", number: 13 });
+    expect(steps.find((e) => e.kind === "tool.use" && e.agentId === "agent-13")).toMatchObject({
+      summary: "Editing header.tsx",
+    });
   });
 });

@@ -110,7 +110,9 @@ export function parseLine(line: string): ParseResult {
     : [];
   const rest = type === "assistant" ? assistantEvents(raw, at, sessionId) : userEvents(raw, at, sessionId);
   const events = raw.isSidechain === true ? rest.filter((e) => e.kind !== "prompt") : rest;
-  return { events: [...seen, ...events], skipped: 0 };
+  const agentId = str(raw.agentId);
+  const all = [...seen, ...events];
+  return { events: agentId ? all.map((e) => ({ ...e, agentId })) : all, skipped: 0 };
 }
 
 /**
