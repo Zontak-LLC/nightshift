@@ -44,3 +44,26 @@ describe("the rules catch what they claim to catch", () => {
     expect(check("src/parser/x.ts", "x\n".repeat(301)).join()).toMatch(/lines \(max 300\)/);
   });
 });
+
+describe("test samples", () => {
+  it.each(['{"cwd":"/Users/ana/app"}', '{"cwd":"/home/ana/app"}', '{"to":"ana@gmail.com"}'])(
+    "refuse real-looking data %s",
+    (text) => {
+      expect(findProblems([{ path: "test/fixtures/a.jsonl", text }]).join()).toMatch(/real data/);
+    },
+  );
+  it("accept an invented sample, an example.com address and a marked fake secret", () => {
+    expect(
+      findProblems([{ path: "test/fixtures/a.jsonl", text: '{"cwd":"/work/demo-app","to":"dev@example.com"}' }]),
+    ).toEqual([]);
+    expect(
+      findProblems([{ path: "test/x.test.ts", text: 'const k = "ghp_FAKEabcdefghijklmnopqrstuvwxyz1234";' }]),
+    ).toEqual([]);
+  });
+
+  it("check the docs too", () => {
+    expect(findProblems([{ path: "docs/notes.md", text: "logs live in /Users/ana/.claude" }]).join()).toMatch(
+      /real data/,
+    );
+  });
+});

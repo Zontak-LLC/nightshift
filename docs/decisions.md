@@ -22,6 +22,10 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
 
 - **Version 1: Claude Code logs only, read only** (2026-10-23).
   - Later: GitHub pull requests and CI runs (version 2).
+- **Version 2: Night run**, Night Shift starts the work itself (2026-10-23, the owner). **Default: all night until the
+  queue is done.** Optional `ticketLimit` (5, 10, ...) for accounts with usage limits, then "Start next batch". Reaching a
+  usage limit pauses, never fails, and resumes without redoing finished tickets.
+  - **OPEN: in version 1 instead?** Recommended no: watching must be reliable before Night Shift starts anything.
 
 ## Language and tools (Rule 1)
 
