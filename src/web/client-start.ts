@@ -65,6 +65,9 @@ export const CLIENT_START = String.raw`
       ui.stats[s[0]] = stat(s[1]);
       stats.append(ui.stats[s[0]].box);
     });
+    ui.meters = el("div", "meters");
+    ui.meters.hidden = true;
+    stats.append(ui.meters);
     ui.conn = el("span", "conn");
     ui.conn.setAttribute("role", "status");
     ui.connText = el("span", null, "LIVE");

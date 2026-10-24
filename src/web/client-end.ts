@@ -2,7 +2,25 @@
  * The last part of the page script (see client.ts): the header totals and NOW strip, the Terminal and Timeline tabs,
  * the keys, the clocks and the live connection. It closes the function client-start.ts opens.
  */
-export const CLIENT_END = String.raw`  function renderTop(view) {
+export const CLIENT_END = String.raw`  // ---- the usage meters in the header: 10 segments each, amber from 75%, red from 90%, grey when stale ----
+  function renderMeters(meter) {
+    var v = meterView(meter, Date.now());
+    ui.meters.hidden = !v || !v.bars.length;
+    ui.meters.textContent = "";
+    if (!v) return;
+    v.bars.forEach(function (b) {
+      var text = b.pct + "%" + (b.resetsAt ? " · resets " + hhmm(new Date(b.resetsAt).toISOString()) : "") + (v.stale ? " · stale" : "");
+      var box = el("span", "meter " + (v.stale ? "stale" : b.level)), segs = el("span", "segs");
+      box.setAttribute("role", "img");
+      box.setAttribute("aria-label", b.label + " usage " + text);
+      for (var i = 0; i < 10; i++) segs.append(el("i", i < b.on ? "on" : null));
+      box.append(el("span", "eyebrow", b.label), segs, el("span", "val", text));
+      ui.meters.append(box);
+    });
+  }
+
+  function renderTop(view) {
+    renderMeters(view.meter);
     document.title = "Night Shift · " + view.project;
     ui.title.textContent = "Night Shift · " + view.project;
     ui.where.textContent = [view.repo, view.folder, view.branch].filter(Boolean).join(" · ");

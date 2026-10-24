@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { startEngine } from "./engine.js";
+import { startMeter } from "./meter.js";
 import type { NightEvent, RunEvent } from "./parser/index.js";
 import { startServer } from "./server/index.js";
 import { DEFAULT_KEEP_DAYS, repoOf } from "./store/index.js";
@@ -33,21 +34,24 @@ async function start(): Promise<void> {
     onError: (error) => console.error(`nightshift: ${error instanceof Error ? error.message : String(error)}`),
   });
   const { board } = engine;
+  const meter = startMeter(process.env.NIGHTSHIFT_USAGE || join(homedir(), ".claude", "usage-now.json"));
   const server = await startServer(Number(process.env.NIGHTSHIFT_PORT) || 4400, {
     view: (project) => {
       const view = board.view(project);
       const home = homedir();
       const folder = view.folder?.startsWith(home) ? `~${view.folder.slice(home.length)}` : view.folder;
-      return { ...view, folder, repo: view.folder ? repoOf(view.folder) : null };
+      return { ...view, folder, repo: view.folder ? repoOf(view.folder) : null, meter: meter.current() };
     },
     projects: () => board.projects(),
   });
   publish = server.publish;
+  setInterval(server.refresh, 30_000).unref(); // the meter changes without any event
   console.info(
     `Night Shift ${pkg.version} · watching ${root}\nHistory: ${join(dataDir, "nightshift.db")} (${keepDays} days)\nBoard: http://localhost:${server.port}/\n`,
   );
   const quit = async () => {
     engine.stop();
+    meter.stop();
     await server.close();
     process.exit(0);
   };
