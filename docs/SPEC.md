@@ -1,6 +1,6 @@
 # Night Shift: specification
 
-Version 0.2 · 2026-10-23 · Owner: Denis Zontak · Status: draft, being shaped by conversation
+Version 0.4 · 2026-10-23 · Owner: Denis Zontak · Status: draft, being shaped by conversation
 
 ## 1. One sentence
 
@@ -45,13 +45,24 @@ Every choice below was picked for this job, not from habit. The runner-up is nam
 1. **Now:** every Claude Code session active in the last 10 minutes, one row each: project, branch, what it is doing right now ("Editing src/lib/day-nav.ts", "Running npm run ci"), and how long ago. It updates live (under 2 seconds after the log changes).
 2. **Session detail:** click a session to see its steps as a timeline: reads, edits, commands, test results, in order, with times.
 3. **Workflow board:** when a workflow is running, its agents as cards moving through stations (queued, working, checking, done, skipped), like the 2026-10-23 assembly line.
-4. **History:** last night's runs kept in SQLite; a "Last night" view that summarises what was done: sessions, files changed, commands run, errors.
-5. **One command to start, for anyone:** `npx nightshift` finds the Claude Code logs folder on its own (macOS, Linux and Windows locations), starts the service and opens the page. A first-run screen says what it found ("12 projects, 3 sessions running") and how to change it.
-6. **Settings without a settings screen:** an optional `nightshift.config.json` (port, which projects to watch, which to hide) with safe defaults; the page shows where the file lives.
+   **Several at once:** two pipelines in two projects (say a ticket run in one and a review run in another) show as two
+   lanes on the same board, each named after its project.
+4. **One board for everything, showing only what is active:** Night Shift reads every Claude Code project, but the
+   screen shows only the projects with activity in the last 10 minutes, grouped under the project's name. A project
+   with nothing running does not appear (its runs are in History). Dozens of projects in the folder still give a short,
+   calm screen.
+5. **History:** last night's runs kept in SQLite; a "Last night" view that summarises what was done: sessions, files changed, commands run, errors.
+6. **One command to start, for anyone:** `npx nightshift` finds the Claude Code logs folder on its own (macOS, Linux and Windows locations), starts the service and opens the page. A first-run screen says what it found ("12 projects, 3 sessions running") and how to change it.
+7. **Settings without a settings screen:** an optional `nightshift.config.json` (port, which projects to watch, which to hide) with safe defaults; the page shows where the file lives.
 
 **Out (not in version 1, on purpose):**
 - Watching GitHub pull requests and CI runs (version 2).
-- Controlling agents (pausing, stopping): Night Shift only watches.
+- Controlling agents (pausing, stopping): version 1 only watches.
+- **Night run (version 2, the owner's idea, 2026-10-23):** Night Shift starts the night's work itself. **By default it
+  runs all night until every ticket in the queue is done.** A developer whose account has a usage limit can set one
+  (`ticketLimit` in `nightshift.config.json`, for example 5 or 10): the run then stops cleanly after that many tickets
+  with a summary, and **"Start next batch"** runs the next ones. Either way, reaching the account's usage limit pauses
+  the run ("Paused: usage limit") instead of failing it, and it resumes later without redoing finished tickets. Watching (version 1) comes first: a run can only be safe once it can be seen.
 - Accounts, sign-in, cloud hosting, a shared team board, a phone view.
 - Costs and token counts (version 2, if the logs carry them).
 - The menu-bar app and the e-ink desk display (later stretches).
@@ -83,6 +94,7 @@ Each scenario is an automated test that feeds real-shaped log lines in and check
 1. **A session starts:** a new log file appears; within 2 seconds "Now" shows the project, branch and "Starting".
 2. **A session works:** it reads a file, edits it, runs `npm test`; the session timeline shows Read, Edit, Command, Result in that order, with the file names and the exit status.
 3. **Two sessions at once:** two projects work at the same time; "Now" shows both, each with its own last step, never mixed.
+   A third project that was busy yesterday but is quiet now does not appear at all.
 4. **A workflow runs:** a journal records 3 agents; the board shows them moving queued → working → done, and a skipped one in "skipped".
 5. **A broken line:** a half-written or unknown log line is skipped and counted, never crashes the service.
 6. **Restart:** stop and start Night Shift; history and current state come back from SQLite; nothing is shown twice.
@@ -128,4 +140,6 @@ Claude writes most of the code; these keep it from drifting into a mess on a lon
 ## 13. Change log
 
 - 0.1 (2026-10-23): first draft from the conversation: Claude Code logs only in v1, GitHub with CI, Node.js + TypeScript, SSE, SQLite, local page, Rule 1 and the guardrails.
+- 0.4 (2026-10-23): one board for all projects, showing only the active ones; several pipelines as lanes side by side.
+- 0.3 (2026-10-23): Night run planned for version 2: all night by default, an optional ticket limit with "Start next batch", pause on usage limit.
 - 0.2 (2026-10-23): it is for any developer, not only me: install with `npx nightshift`, find the logs on any OS, a first-run screen, an optional config file, nothing leaves the computer; team board moved to the open questions.

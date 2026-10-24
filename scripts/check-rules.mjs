@@ -9,13 +9,13 @@ const walk = (dir) => {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) walk(p);
-    else if (/\.(ts|mjs)$/.test(name)) {
+    else if (/\.(ts|mjs|jsonl|json|md)$/.test(name)) {
       const path = relative(".", p).split(sep).join("/");
       if (!SELF.has(path)) files.push({ path, text: readFileSync(p, "utf8") });
     }
   }
 };
-for (const root of ["src", "test", "scripts"]) walk(root);
+for (const root of ["src", "test", "scripts", "docs"]) walk(root);
 
 const problems = findProblems(files);
 if (problems.length) {
