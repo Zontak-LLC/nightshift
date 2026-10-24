@@ -38,6 +38,11 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
 - **Node.js + TypeScript** (the owner prefers Node for own projects; it fits file watching and streaming). Runner-up: Go.
 - **Server-Sent Events** for live updates (one-way is all that is needed). Runner-up: WebSockets.
 - **SQLite** for history (one file, searchable). Runner-up: JSON files.
+  - **History = the event log (ticket 6, 2026-10-24).** The board is built from events alone, so the file stores the events
+    (idempotent by file + inode + epoch + line end) and each file's offset; sessions, background agents, steps and
+    tickets are rebuilt by replay, not kept in tables of their own that could drift from the events. Retention removes
+    whole sessions quiet for 30 days (`NIGHTSHIFT_KEEP_DAYS`). If the file cannot be opened, Night Shift runs without
+    history and says so.
 - **A local web page**, plain TypeScript and CSS, no framework for v1. Runner-up: a menu-bar app (later stretch).
 
 ## Where does the code live?
