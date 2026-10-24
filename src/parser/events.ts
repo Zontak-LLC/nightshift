@@ -9,9 +9,15 @@ export type NightEvent =
   | (Base & { kind: "session.seen"; cwd: string; branch: string | null })
   | (Base & { kind: "session.title"; title: string })
   | (Base & { kind: "prompt"; text: string })
-  | (Base & { kind: "tool.use"; toolUseId: string; tool: string; summary: string })
+  | (Base & { kind: "tool.use"; toolUseId: string; tool: string; summary: string; paths?: string[] })
   | (Base & { kind: "tool.result"; toolUseId: string; ok: boolean })
   | (Base & { kind: "reply"; text: string })
+  /** A background agent's task: the first line of the prompt it was given. */
+  | (Base & { kind: "agent.task"; text: string })
+  /** A background agent's name, from the small file Claude Code keeps beside its log. */
+  | (Base & { kind: "agent.title"; title: string })
+  /** An agent's turn ended with an answer (not a tool call): it is done until its next step. */
+  | (Base & { kind: "turn.end" })
   | (Base & { kind: "pr.link"; number: number; url: string })
   /** The API refused or broke off: a usage limit (with its reset time), a lost connection, an expired login. */
   | (Base & {

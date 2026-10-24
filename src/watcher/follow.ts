@@ -1,6 +1,6 @@
-import { open, readdir, stat } from "node:fs/promises";
+import { open, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { type NightEvent, parseJournalLine, parseLine, type RunEvent } from "../parser/index.js";
+import { type NightEvent, parseAgentMeta, parseJournalLine, parseLine, type RunEvent } from "../parser/index.js";
 import { advance, START, startAt, type TailState } from "./tail.js";
 
 export type WatchOptions = {
@@ -23,7 +23,12 @@ export type WatchOptions = {
 type Followed = { tail: TailState; ino: number };
 
 /** A log to follow. A journal is a workflow's ticket list; everything else is a session or agent conversation. */
-type LogFile = { path: string; journal: { runId: string; sessionId: string } | null };
+type LogFile = {
+  path: string;
+  journal: { runId: string; sessionId: string } | null;
+  /** A background agent's `agent-<id>.meta.json`: a small JSON file with the description it was started with. */
+  meta?: { sessionId: string; agentId: string };
+};
 
 const jsonl = async (dir: string): Promise<string[]> =>
   (await readdir(dir).catch(() => [])).filter((f) => f.endsWith(".jsonl")).map((f) => join(dir, f));
@@ -41,6 +46,18 @@ async function workflowLogs(sessionDir: string, sessionId: string): Promise<LogF
   return out;
 }
 
+/** One session folder's logs: its workflows, its background agents' logs and their `.meta.json` descriptions. */
+async function sessionLogs(path: string, sessionId: string): Promise<LogFile[]> {
+  const out = await workflowLogs(path, sessionId);
+  const subagents = join(path, "subagents");
+  for (const f of await jsonl(subagents)) out.push({ path: f, journal: null });
+  for (const f of await readdir(subagents).catch(() => [])) {
+    const agentId = /^agent-(.+)\.meta\.json$/.exec(f)?.[1];
+    if (agentId) out.push({ path: join(subagents, f), journal: null, meta: { sessionId, agentId } });
+  }
+  return out;
+}
+
 /** Every log under `root`, or null when `root` does not exist (yet). Session folders hold their agents' logs. */
 async function logFiles(root: string): Promise<LogFile[] | null> {
   const projects = await readdir(root, { withFileTypes: true }).catch(() => null);
@@ -52,10 +69,7 @@ async function logFiles(root: string): Promise<LogFile[] | null> {
     for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
       const path = join(dir, entry.name);
       if (entry.isFile() && entry.name.endsWith(".jsonl")) out.push({ path, journal: null });
-      else if (entry.isDirectory()) {
-        out.push(...(await workflowLogs(path, entry.name)));
-        for (const f of await jsonl(join(path, "subagents"))) out.push({ path: f, journal: null });
-      }
+      else if (entry.isDirectory()) out.push(...(await sessionLogs(path, entry.name)));
     }
   }
   return out;
@@ -87,6 +101,8 @@ export function watchLogs(opts: WatchOptions): () => void {
     onError,
   } = opts;
   const files = new Map<string, Followed>();
+  /** meta file -> the size last read (it is written once, then left alone). */
+  const metas = new Map<string, number>();
   let first = true;
   let busy = false;
   let stopped = false;
@@ -140,12 +156,26 @@ export function watchLogs(opts: WatchOptions): () => void {
     return step.lines;
   }
 
+  /** An agent's description, read once per change of the file (a half-written one is retried on the next look). */
+  async function readMeta(file: LogFile & { meta: NonNullable<LogFile["meta"]> }): Promise<void> {
+    const info = await stat(file.path).catch(() => null);
+    if (!info || metas.get(file.path) === info.size) return;
+    const text = await readFile(file.path, "utf8").catch(() => null);
+    if (text === null) return;
+    const event = parseAgentMeta(text, file.meta.sessionId, file.meta.agentId);
+    if (event) safely(() => onEvent({ ...event, agentId: file.meta.agentId }));
+    metas.set(file.path, info.size);
+  }
+
   async function tick(): Promise<void> {
     if (busy || stopped) return;
     busy = true;
     try {
       const paths = await logFiles(root);
-      for (const file of paths ?? []) emit(await newLines(file), file.journal);
+      for (const file of paths ?? []) {
+        if (file.meta) await readMeta({ ...file, meta: file.meta });
+        else emit(await newLines(file), file.journal);
+      }
       if (paths) first = false; // a folder that appears later is new work: read it all
     } finally {
       busy = false;

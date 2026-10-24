@@ -7,11 +7,14 @@ import type { NightEvent } from "./parser/index.js";
  * Claude Code writes a session's title and pull-request link into the log again from time to time, so each is printed
  * only when it is new for that session.
  */
-export function terminalPrinter(): (event: NightEvent) => string | null {
-  const line = lineFor();
+export function terminalPrinter(
+  agentOf: (agentId: string) => { project: string; name: string } | null = () => null,
+): (event: NightEvent) => string | null {
+  const main = lineFor();
   // Log text (a prompt, a title, a file name) may hold escape codes that would steer the terminal: print them inert.
   return (event) => {
-    const out = line(event);
+    const agent = event.agentId ? agentOf(event.agentId) : null;
+    const out = agent ? agentLine(event, agent) : main(event);
     return out === null ? null : out.replace(CONTROL, "�");
   };
 }
@@ -30,6 +33,13 @@ const TROUBLE = {
 function troubleText(event: Extract<NightEvent, { kind: "session.trouble" }>): string {
   const resets = event.resetsAt ? ` · resets ${clock(event.resetsAt).slice(0, 5)}` : "";
   return `⏸ ${TROUBLE[event.reason]}${resets}`;
+}
+
+/** A background agent's step: filed under the project it really works in, tagged with its short name. */
+function agentLine(event: NightEvent, agent: { project: string; name: string }): string | null {
+  const head = `${clock(event.at)}  ${agent.project.padEnd(18)} [${agent.name}]`;
+  if (event.kind === "tool.use") return `${head} ${event.summary}`;
+  return event.kind === "tool.result" && !event.ok ? `${head} ✕ that step failed` : null;
 }
 
 function lineFor(): (event: NightEvent) => string | null {

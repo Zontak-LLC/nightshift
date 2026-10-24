@@ -73,6 +73,30 @@ export function segmentsOf(c: ShiftColumns, nowMs: number) {
     .sort((a, b) => a.from - b.from);
 }
 
+export type ShiftAgent = { name: string; active: boolean; startedAt: string | null; lastAt: string };
+
+/** "3 agents working", "1 agent working", or "" when none is active. */
+export function agentsWorking(agents: ShiftAgent[]): string {
+  const n = agents.filter((a) => a.active).length;
+  return n ? `${n} ${n === 1 ? "agent" : "agents"} working` : "";
+}
+
+/** Each background agent that took a step as a span of time (negative numbers: they are not tickets). */
+export function agentSegments(agents: ShiftAgent[], nowMs: number) {
+  return agents
+    .filter((a) => a.startedAt && Number.isFinite(Date.parse(a.startedAt)))
+    .map((a, i) => {
+      const from = Date.parse(a.startedAt ?? "");
+      return {
+        num: -1 - i,
+        label: a.name,
+        kind: a.active ? "live" : "done",
+        from,
+        to: Math.max(from, a.active ? nowMs : Date.parse(a.lastAt) || from),
+      };
+    });
+}
+
 /**
  * The timeline: one row per clock hour from the start of the run to now (the newest 24 at most), each holding the
  * pieces of the segments that fall in it, as percentages of the hour. A label goes only where a segment starts.
@@ -111,5 +135,7 @@ export function hourRows(
  */
 export const SHIFT = [
   "var __name = function (f) { return f; };",
-  ...[durationText, shiftTotals, finishEstimate, segmentsOf, hourRows].map((f) => f.toString()),
+  ...[durationText, shiftTotals, finishEstimate, segmentsOf, agentsWorking, agentSegments, hourRows].map((f) =>
+    f.toString(),
+  ),
 ].join("\n");

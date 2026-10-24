@@ -24,6 +24,11 @@ before changing anything; update both in the same commit when a choice changes.
   turns them into stations: a checking step (`npm run ci`, playwright, ...) means Checking; a result means Done or
   Skipped (`skipped`, `blocked`, ...). The CLI adds the repo name (`store/repo.ts`, from `.git/config`) and shows the
   home folder as `~`.
+- Background agents (ticket 7): the watcher also follows `<session>/subagents/agent-*.jsonl` and reads each
+  `agent-*.meta.json` (its description; `parseAgentMeta`). The parser adds `paths` to `tool.use` (`parser/paths.ts`),
+  `agent.task`, `agent.title` and `turn.end`. `store/workers.ts` keeps one worker per agent id that is not a pipeline
+  agent and files it by the repository most of its paths belong to (`store/root.ts`, worktree = its main repo); `Board`
+  exposes `view().agents`, `projects()[].agents` and `agentLabel()` (the terminal's tag). See decisions.md.
 - Trouble (ticket 5): `parser/trouble.ts` turns Claude Code's `isApiErrorMessage` lines into `session.trouble` (reason,
   `resetsAt`, limit type); the board keeps it on the session or the agent's ticket until the next real step and lists it
   as `alerts` in the view; the page's NOW strip shows the newest one in amber; a late step of a finished ticket only fills in its times.

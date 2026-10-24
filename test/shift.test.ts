@@ -2,6 +2,8 @@ import { runInNewContext, Script } from "node:vm";
 import { describe, expect, it } from "vitest";
 import { boardPage } from "../src/web/index.js";
 import {
+  agentSegments,
+  agentsWorking,
   durationText,
   finishEstimate,
   hourRows,
@@ -115,5 +117,37 @@ describe("the page", () => {
       `${SHIFT}; JSON.stringify([hourRows(${segs[0]?.from}, ${now}, ${JSON.stringify(segs)}), durationText(65 * 60000)])`,
     );
     expect(JSON.parse(sent)).toEqual([hourRows(Date.parse(at("02:40")), now, segs), "1h 05m"]);
+  });
+});
+
+describe("background agents on the board", () => {
+  const agent = (name: string, active: boolean, from: string | null, last: string) => ({
+    name,
+    active,
+    startedAt: from ? at(from) : null,
+    lastAt: at(last),
+  });
+  it("says how many agents are working, in words", () => {
+    expect(agentsWorking([])).toBe("");
+    expect(agentsWorking([agent("a", false, "01:00", "01:10")])).toBe("");
+    expect(agentsWorking([agent("a", true, "01:00", "01:10")])).toBe("1 agent working");
+    expect(agentsWorking([agent("a", true, "01:00", "01:10"), agent("b", true, "01:00", "01:10")])).toBe(
+      "2 agents working",
+    );
+  });
+  it("draws a working agent up to now and a finished one up to its last step, and skips one that never stepped", () => {
+    const now = Date.parse(at("02:00"));
+    const segs = agentSegments(
+      [
+        agent("live", true, "01:00", "01:50"),
+        agent("done", false, "01:10", "01:20"),
+        agent("none", false, null, "01:00"),
+      ],
+      now,
+    );
+    expect(segs).toEqual([
+      { num: -1, label: "live", kind: "live", from: Date.parse(at("01:00")), to: now },
+      { num: -2, label: "done", kind: "done", from: Date.parse(at("01:10")), to: Date.parse(at("01:20")) },
+    ]);
   });
 });

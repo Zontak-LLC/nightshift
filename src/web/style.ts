@@ -107,6 +107,15 @@ a { color: var(--live); }
 .blocks { flex: 1; overflow-y: auto; padding: 4px 0; }
 .banner { padding: 12px 20px; font: 13px/1.6 var(--mono); color: var(--muted); }
 .banner b { color: var(--strong); }
+.agents { margin-top: 14px; padding: 12px 14px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); }
+.agents h2 { font: 600 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.agents h2 .count { margin-left: 10px; color: var(--live); }
+.agent { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-top: 1px solid var(--line); min-width: 0; font-size: 13px; }
+.agent .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); flex: none; }
+.agent.live .dot { background: var(--live); }
+.agent b { color: var(--strong); font-weight: 600; flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent .step { color: var(--muted); font-family: var(--mono); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent .when { margin-left: auto; color: var(--faint); font: 11.5px var(--mono); flex: none; }
 .blk { position: relative; padding: 9px 18px 9px 22px; border-top: 1px solid var(--panel); font: 13px/1.6 var(--mono); }
 .blk.run { background: var(--live-soft); }
 .blk.run::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--live); }

@@ -1,6 +1,6 @@
 # Night Shift: specification
 
-Version 0.5 · 2026-10-23 · Owner: Denis Zontak · Status: draft, being shaped by conversation
+Version 0.7 · 2026-10-24 · Owner: Denis Zontak · Status: draft, being shaped by conversation
 
 ## 1. One sentence
 
@@ -38,6 +38,14 @@ Every choice below was picked for this job, not from habit. The runner-up is nam
 - **Claude Code session logs:** one JSON-lines file per session, under `~/.claude/projects/<project-folder>/<session-id>.jsonl`. Each line is one event: a message, a tool call (read a file, edit a file, run a command), a tool result, with a timestamp, the working folder and the git branch.
 - **Workflow journals:** when a multi-agent workflow runs, `.../subagents/workflows/<run-id>/journal.jsonl` records each agent: started, finished, result.
 - Night Shift only **reads** these files. It never writes to them, never starts or stops an agent, and never sends anything off the Mac.
+
+## 5b. Background agents
+
+A session can start background agents. Their logs sit next to the session (`<session>/subagents/agent-<id>.jsonl`,
+name in `agent-<id>.meta.json`). Night Shift follows them like any log. Each is a worker linked to its parent session and
+filed under the project it really works in (decisions.md says how, and where it can be wrong). The board shows them
+under the line, the NOW strip counts the active ones, the Terminal tab streams their steps tagged with their name, the
+Timeline draws a bar each, and the start page lists projects that only helpers touched.
 
 ## 6. Version 1 scope (the MVP)
 
@@ -129,6 +137,9 @@ Each scenario is an automated test that feeds real-shaped log lines in and check
 8. **Read only:** no test, and no code path, writes inside the Claude Code folder.
 9. **A stranger installs it:** on a clean machine with Claude Code logs in the usual place, `npx nightshift` starts, finds the logs, and the first-run screen names what it found, with no setup.
 10. **Nothing leaves the computer:** the service listens on localhost only and makes no outgoing network calls (a test fails if it tries).
+11. **Background agents:** a parent session starts two helpers in other repositories and one in a worktree of its own; the
+    board of each repository shows only its helpers, the parent's project keeps the worktree one, new helper files and
+    appended lines show live, and a half-written last line breaks nothing.
 
 ## 10. Guardrails (quality, from the first commit)
 
@@ -166,6 +177,7 @@ Claude writes most of the code; these keep it from drifting into a mess on a lon
 
 ## 13. Change log
 
+- 0.7 (2026-10-24): background agents (subagents) are followed and filed under the project they really work in (section 5b, scenario 11).
 - 0.1 (2026-10-23): first draft from the conversation: Claude Code logs only in v1, GitHub with CI, Node.js + TypeScript, SSE, SQLite, local page, Rule 1 and the guardrails.
 - 0.6 (2026-10-24): the board takes the first design's layout (header totals, NOW strip, Board, Terminal and Timeline tabs) in the readable palette (section 8).
 - 0.5 (2026-10-24): the board is built and watches a real pipeline (its journal and its agents' logs); the owner chose the look (section 8).
