@@ -86,18 +86,23 @@ Claude Code log files ──► Watcher ──► Parser ──► Event store (
 
 - **Readable for hours** (decided 2026-10-24, see `decisions.md`): dark grey-blue, soft off-white text, colour only with a
   meaning (blue live, green done, amber needs attention), sans titles and monospace machine output.
-- **Laid out like CICS / Norton Commander:** a top line with the date, time and a status light; labelled fields; framed
-  areas with their title in the frame; a message line that says the state in one sentence; a Key=Action line, and the
-  keys work (arrows move between tickets and columns, Enter opens, Esc closes).
-- One fixed board height; finished and waiting tickets are one-line rows with a result code (`[MRG]`, `[PART]`, `[PLAN]`,
-  `[DRFT]`, `[SKIP]`); a click opens a ticket in place; a full column scrolls inside itself with "+N more".
+- **Laid out like the first design (the owner's pick, 2026-10-24):** a header with the status light, "Night Shift ·
+  <project>", the repo, folder and branch, and the totals (done of total, merged, skipped, average ticket time,
+  estimated finish, time on shift); a NOW strip (the ticket being worked on, its step and a live clock; amber with the
+  trouble and its reset time when work has stopped); three tabs, remembered: **Board** (the assembly line: Queued,
+  Working, Checking, Done, Skipped, each with a belt along its foot; the station at work runs its belt, stations already
+  passed turn green), **Terminal** (one block per step, the running one marked) and **Timeline** (one row per hour, a
+  bar per ticket, a line for now). A Key=Action line stays at the foot and the keys work (arrows move between tickets
+  and stations, Enter opens, Esc closes).
+- One fixed board height; a full station scrolls inside itself with "+N more"; finished cards carry a result code and
+  the time they took (`MRG · 30m 00s`); a click opens the ticket in a dialog (status, summary, last steps, its pull request).
 - Motion only where it explains a change (a ticket gliding to its new column, a step rolling over). Nothing loops except
   the status light's slow blink. Reduced motion turns all of it off.
-- No brown, no glow, no pure black.
+- No brown, no glow, no pure black. Four colours, one meaning each: blue working, green done, amber needs you, grey queued or skipped.
 
 ## 8b. When things go wrong
 
-The board never looks busy while nothing happens. The message line turns amber and says it in words, with the next step:
+The board never looks busy while nothing happens. The NOW strip turns amber and says it in words, with the next step:
 
 | What happens                         | What the board says                                                                                      |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
@@ -162,6 +167,7 @@ Claude writes most of the code; these keep it from drifting into a mess on a lon
 ## 13. Change log
 
 - 0.1 (2026-10-23): first draft from the conversation: Claude Code logs only in v1, GitHub with CI, Node.js + TypeScript, SSE, SQLite, local page, Rule 1 and the guardrails.
+- 0.6 (2026-10-24): the board takes the first design's layout (header totals, NOW strip, Board, Terminal and Timeline tabs) in the readable palette (section 8).
 - 0.5 (2026-10-24): the board is built and watches a real pipeline (its journal and its agents' logs); the owner chose the look (section 8).
 - 0.4 (2026-10-23): a board per project at its own address, as many open at once as you like; a start page lists the active ones.
 - 0.3 (2026-10-23): Night run planned for version 2: all night by default, an optional ticket limit with "Start next batch", pause on usage limit.

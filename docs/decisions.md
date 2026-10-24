@@ -54,9 +54,14 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
   green = done, amber = needs attention. Sans for titles, monospace only for machine output.
   - Ruled out: phosphor green on black (tiring after a while), lavender on charcoal with gaps between boxes (busy),
     glow and scan lines (decoration).
-- **Layout like CICS and Norton Commander:** a top line (title, date, time, status light), labelled fields (REPO, FOLDER,
-  BRANCH), framed areas with the title in the frame, a plain-words message line, a Key=Action line. Function first:
-  anything that is only decoration is dropped.
+- **Layout: the first design, in this palette (2026-10-24, the owner: "less boring", "looks more unique"):** a header
+  of totals, a NOW strip, and tabs for Board (the assembly line with a belt under each station), Terminal and Timeline.
+  It replaced the CICS / Norton Commander layout (framed areas with titles in the frame, a message line); its Key=Action
+  line stayed. The first design's eight status colours were cut to four, each with one meaning.
+- **The arithmetic is shared, not copied:** totals, the finish estimate and the timeline's hour rows live in
+  `src/web/shift.ts`, are tested there, and are sent to the page as their own source text (`Function.prototype.toString`),
+  so the browser runs the tested code. `tsx` (`npm run dev`) wraps named arrows in `__name(...)`; a one-line no-op
+  stand-in sent before them makes that harmless.
 - **Fonts on the computer only:** the page loads nothing from the internet (no web fonts), so nothing leaves it.
 - **The page asks for nothing:** the server pushes each open board its whole state over the stream (at most every 300 ms),
   so a reconnecting page is at once up to date, and the web layer never calls `fetch`.

@@ -115,7 +115,9 @@ export class Board {
       return Boolean(h);
     }
     const t = run.tickets.get(where.number);
-    if (!t || t.station === "done" || t.station === "skipped") return false;
+    if (!t) return false;
+    // A finished ticket whose steps are read after its result (Night Shift started mid-run): keep only their times.
+    if (t.station === "done" || t.station === "skipped") return widenTimes(t, e.at);
     t.step = e.summary;
     t.trouble = null; // real work again: the trouble is over
     t.steps++;
@@ -244,6 +246,15 @@ function nowRows(sessions: Session[], run: Run | null): NowRow[] {
     }
   }
   return now;
+}
+
+function widenTimes(t: Ticket, at: string): boolean {
+  if (!at) return false;
+  const start = t.startedAt && t.startedAt < at ? t.startedAt : at;
+  const end = t.finishedAt && t.finishedAt > at ? t.finishedAt : at;
+  if (start === t.startedAt && end === t.finishedAt) return false;
+  Object.assign(t, { startedAt: start, finishedAt: end });
+  return true;
 }
 
 function newTicket(number: number, title: string, queueIndex: number): Ticket {
