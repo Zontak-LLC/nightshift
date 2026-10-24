@@ -16,8 +16,8 @@ before changing anything; update both in the same commit when a choice changes.
   127.0.0.1 only and answers only a `Host` of `127.0.0.1:<port>` or `localhost:<port>` (DNS rebinding), no CORS;
   a page that stops reading is dropped past 1 MB waiting. `res.write()` there is a network write, which the
   disk-write rule allows. The terminal view prints control characters from logs as `�` (no escape injection).
-- `src/web/`: the page, sent as text by the server (`page.ts`, `style.ts`, `client-start.ts` + `client-end.ts` = one
-  script). It asks the server for nothing: `/events?project=<name>` pushes the whole board (`event: board`), `?project=`
+- `src/web/`: the page, sent as text by the server (`page.ts`, `style.ts`; one script = `client-start.ts` + `shift.ts`
+  (pure arithmetic, tested, sent as its own source) + `client-board.ts` + `client-end.ts`). Tabs: Board, Terminal, Timeline. It asks the server for nothing: `/events?project=<name>` pushes the whole board (`event: board`), `?project=`
   the project list. Every value from the logs is set with `textContent`. No web fonts or other outside loads.
 - Pipelines: the watcher also follows `<session>/subagents/workflows/<run>/journal.jsonl` (read whole: the run's ticket
   list, parsed by `parser/journal.ts`) and each `agent-*.jsonl` (its steps carry `agentId`). `store/board.ts` (`Board`)
@@ -26,7 +26,7 @@ before changing anything; update both in the same commit when a choice changes.
   home folder as `~`.
 - Trouble (ticket 5): `parser/trouble.ts` turns Claude Code's `isApiErrorMessage` lines into `session.trouble` (reason,
   `resetsAt`, limit type); the board keeps it on the session or the agent's ticket until the next real step and lists it
-  as `alerts` in the view; the page's message line shows the newest one in amber.
+  as `alerts` in the view; the page's NOW strip shows the newest one in amber; a late step of a finished ticket only fills in its times.
 - `src/cli.ts` wires them together (`src/terminal.ts` is the terminal view: one line per step, titles and pull
   requests printed once per session, local time); `test/` holds the scenario tests and `test/fixtures/` real-shaped sample logs.
 

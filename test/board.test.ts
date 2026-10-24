@@ -49,6 +49,21 @@ describe("the board follows a pipeline through the night", () => {
     });
   });
 
+  it("keeps the times of a finished ticket whose steps are read after its result, without moving it", () => {
+    const board = demoNight(); // Night Shift started mid-run: #11's result is known before its steps are read
+    board.apply(step("agent-11", "Running npm run ci", "2026-10-23T20:40:00.000Z"));
+    board.apply(step("agent-11", "Reading the ticket", "2026-10-23T20:05:00.000Z"));
+    board.apply(step("agent-11", "Running npm run ci", "2026-10-23T20:40:00.000Z")); // nothing new
+    const t = board.view("demo-app").run?.columns.done[0];
+    expect(t).toMatchObject({
+      number: 11,
+      station: "done",
+      steps: 0,
+      startedAt: "2026-10-23T20:05:00.000Z",
+      finishedAt: "2026-10-23T20:40:00.000Z",
+    });
+  });
+
   it("moves a ticket to Checking while its agent runs the checks, and back to Working after", () => {
     const board = demoNight();
     board.apply(step("agent-13", "Editing src/header.tsx", "2026-10-23T21:10:00.000Z"));
@@ -118,8 +133,9 @@ describe("the board follows a pipeline through the night", () => {
   it("ignores steps from an agent it does not know, and finished tickets do not move", () => {
     const board = demoNight();
     expect(board.apply(step("agent-unknown", "Editing x.ts", "2026-10-23T21:40:00.000Z"))).toBe(false);
-    expect(board.apply(step("agent-11", "Editing late.ts", "2026-10-23T21:41:00.000Z"))).toBe(false);
+    board.apply(step("agent-11", "Editing late.ts", "2026-10-23T21:41:00.000Z")); // only its time is kept
     expect(numbers(board.view("demo-app").run?.columns.done ?? [])).toEqual([11]);
+    expect(board.view("demo-app").run?.columns.done[0]).toMatchObject({ step: null, steps: 0 });
   });
 
   it("shows a newly started run at once, even before its first step, over an older busy run", () => {

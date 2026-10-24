@@ -1,16 +1,17 @@
 /**
- * The first half of the page script (see client.ts): helpers, the start page, building the board, the ticket cards.
- * It opens the function that client-end.ts closes; the two are joined in client.ts.
+ * The first part of the page script (see client.ts): helpers, the start page and the frame of a project's board
+ * (header, NOW strip, tabs, the three panels, the ticket dialog). It opens the function client-end.ts closes.
  */
 export const CLIENT_START = String.raw`
 (function () {
   "use strict";
   var STATIONS = [["queued", "Queued"], ["working", "Working"], ["checking", "Checking"], ["done", "Done"], ["skipped", "Skipped"]];
   var STATUS = { merged: "merged", "partial-merged": "partly merged", "plan-posted": "plan posted", "draft-posted": "draft posted" };
+  var TABS = [["board", "Board"], ["terminal", "Terminal"], ["timeline", "Timeline"]];
   var project = "";
   try { project = decodeURIComponent(location.pathname.slice(1)); } catch (e) { project = location.pathname.slice(1); }
   var root = document.getElementById("app");
-  var cards = new Map(), lists = {}, counts = {}, openId = null, last = null, built = false;
+  var cards = new Map(), lists = {}, counts = {}, cols = {}, last = null, built = false, ui = {};
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -23,13 +24,20 @@ export const CLIENT_START = String.raw`
     var d = new Date(iso);
     return isNaN(d) ? "" : String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
   }
+  function since(iso) { return iso ? durationText(Date.now() - new Date(iso).getTime()) : "–"; }
   function restart(node, cls) { node.classList.remove(cls); void node.offsetWidth; node.classList.add(cls); }
+  function stat(label) {
+    var s = el("div", "stat"), b = el("b", null, "–");
+    s.append(el("span", "eyebrow", label), b);
+    return { box: s, value: b };
+  }
 
   // ---- the start page: projects with something going on ----
   function renderProjects(rows) {
     root.textContent = "";
-    var head = el("header", "head");
-    head.append(el("h1", null, "Night Shift"));
+    var head = el("header", "top"), brand = el("div", "brand");
+    brand.append(el("span", "led"), el("h1", null, "Night Shift"));
+    head.append(brand);
     root.append(head);
     if (!rows.length) { root.append(el("p", "empty", "No Claude Code sessions found yet. Start one and it shows here.")); return; }
     var grid = el("div", "projects");
@@ -43,55 +51,106 @@ export const CLIENT_START = String.raw`
     root.append(grid);
   }
 
-  // ---- one project's board ----
+  // ---- one project's board: built once, then only painted ----
   function build() {
     root.textContent = "";
-    // One status line, like a 3270 screen: the tool, the project and where it lives; the light and the time on the right.
-    var head = el("header", "head status");
-    var left = el("div", "status-left");
-    left.append(el("h1", "brand", "NIGHT SHIFT"), el("span", "proj", project));
-    var conn = el("span", "conn");
-    conn.setAttribute("role", "status");
-    conn.append(el("span", "led"), el("span", "conn-text", "LIVE"));
-    var right = el("div", "status-right");
-    right.append(conn, el("span", "date"), el("span", "clock"));
-    head.append(left, right, el("div", "where"));
-    var night = el("section", "night frame");
-    night.append(el("span", "frame-title", "RUN"));
-    night.setAttribute("aria-label", "The run so far");
-    var facts = el("div", "facts");
-    facts.append(el("span", "meter"), el("span", "so-far"));
-    var track = el("div", "track");
-    track.append(el("span", "rail"), el("span", "fill"));
-    night.append(facts, track, el("div", "hours"));
-    var now = el("div", "now frame");
-    now.setAttribute("aria-live", "polite");
-    var board = el("div", "board");
+    var head = el("header", "top"), brand = el("div", "brand"), name = el("div");
+    ui.title = el("h1", null, "Night Shift · " + project);
+    ui.where = el("div", "where");
+    name.append(ui.title, ui.where);
+    brand.append(el("span", "led"), name);
+    var stats = el("div", "stats");
+    ui.stats = {};
+    [["done", "Done"], ["merged", "Merged"], ["skipped", "Skipped"], ["avg", "Avg"], ["eta", "Est. finish"], ["shift", "On shift"]].forEach(function (s) {
+      ui.stats[s[0]] = stat(s[1]);
+      stats.append(ui.stats[s[0]].box);
+    });
+    ui.conn = el("span", "conn");
+    ui.conn.setAttribute("role", "status");
+    ui.connText = el("span", null, "LIVE");
+    ui.conn.append(el("span", "led"), ui.connText);
+    stats.append(ui.conn);
+    head.append(brand, stats);
+
+    ui.nowbar = el("div", "nowbar idle");
+    ui.nowbar.setAttribute("aria-live", "polite");
+    ui.nowTag = el("span", "tag", "NOW");
+    ui.nowWhat = el("span", "what");
+    ui.nowStep = el("span");
+    ui.nowClock = el("b");
+    var meta = el("span", "meta");
+    meta.append(ui.nowStep, ui.nowClock);
+    ui.nowbar.append(ui.nowTag, ui.nowWhat, meta);
+
+    var tabs = el("nav", "tabs");
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Views");
+    ui.tabs = {};
+    ui.panels = {};
+    TABS.forEach(function (t) {
+      var b = el("button", null, t[1]);
+      b.type = "button";
+      b.id = "tab-" + t[0];
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-controls", "panel-" + t[0]);
+      b.addEventListener("click", function () { show(t[0]); });
+      ui.tabs[t[0]] = b;
+      tabs.append(b);
+      var p = el("section", "panel");
+      p.id = "panel-" + t[0];
+      p.setAttribute("role", "tabpanel");
+      p.setAttribute("aria-labelledby", b.id);
+      ui.panels[t[0]] = p;
+    });
+
+    var floor = el("div", "floor");
+    floor.setAttribute("aria-label", "The line: each ticket moves from station to station");
     STATIONS.forEach(function (s) {
       var col = el("section", "col");
       col.setAttribute("aria-label", s[1]);
-      var h2 = el("h2", null, s[1] + " ");
+      var h2 = el("h2", null, s[1]);
       counts[s[0]] = el("span", "count", "0");
       h2.append(counts[s[0]]);
       lists[s[0]] = el("div", "list");
       var more = el("span", "more-tag");
       more.hidden = true;
       lists[s[0]].addEventListener("scroll", function () { fade(col); }, { passive: true });
-      col.append(h2, lists[s[0]], more);
-      board.append(col);
+      col.append(h2, lists[s[0]], more, el("span", "belt"));
+      cols[s[0]] = col;
+      floor.append(col);
     });
-    // The foot of a CICS screen: a message line in plain words, then the keys as Key=Action.
-    var message = el("div", "message");
-    message.setAttribute("role", "status");
+    ui.panels.board.append(floor);
+    buildTerminal(ui.panels.terminal);
+    buildTimeline(ui.panels.timeline);
+
     var keys = el("footer", "keys");
-    [["↑↓", "Move"], ["←→", "Column"], ["Enter", "Open"], ["Esc", "Close"]].forEach(function (k) {
+    [["↑↓", "Move"], ["←→", "Station"], ["Enter", "Open"], ["Esc", "Close"]].forEach(function (k) {
       var key = el("span");
       key.append(el("b", null, k[0]), "=" + k[1]);
       keys.append(key);
     });
     keys.append(el("span", "keys-note", "read only · nothing leaves this computer"));
-    root.append(head, night, now, board, message, keys);
+    ui.dialog = el("dialog");
+    ui.dialog.setAttribute("aria-labelledby", "dlg-title");
+    ui.dialog.addEventListener("click", function (e) { if (e.target === ui.dialog) ui.dialog.close(); });
+    root.append(head, ui.nowbar, tabs, ui.panels.board, ui.panels.terminal, ui.panels.timeline, keys, ui.dialog);
+    var saved = null;
+    try { saved = localStorage.getItem("nightshift:tab"); } catch (e) { saved = null; }
+    show(ui.tabs[saved] ? saved : "board");
     built = true;
+  }
+
+  function show(name) {
+    TABS.forEach(function (t) {
+      var on = t[0] === name;
+      ui.tabs[t[0]].setAttribute("aria-selected", String(on));
+      ui.tabs[t[0]].tabIndex = on ? 0 : -1;
+      ui.panels[t[0]].hidden = !on;
+    });
+    try { localStorage.setItem("nightshift:tab", name); } catch (e) { /* private mode: the tab is not remembered */ }
+    if (last && name === "timeline") renderTimeline(last);
+    if (name === "terminal" && ui.blocks) ui.blocks.scrollTop = ui.blocks.scrollHeight;
+    if (name === "board") STATIONS.forEach(function (s) { fade(cols[s[0]]); });
   }
 
   function fade(col) {
@@ -104,55 +163,6 @@ export const CLIENT_START = String.raw`
     col.classList.toggle("more", hidden > 0);
     tag.hidden = hidden === 0;
     tag.textContent = "+" + hidden + " more";
-  }
-
-  function cardFor(t) {
-    var c = cards.get(t.number);
-    if (c) return c;
-    c = el("article", "card");
-    c.tabIndex = 0;
-    c.setAttribute("role", "button");
-    var top = el("div", "top");
-    top.append(el("span", "dot"), el("span", "num", "#" + t.number));
-    c.append(top, el("div", "name"), el("div", "step"));
-    var d = el("div", "detail");
-    d.append(el("div", "detail-in"));
-    c.append(d);
-    function toggle() { openId = openId === t.number ? null : t.number; if (last) render(last, true); }
-    c.addEventListener("click", function (e) { if (e.target.tagName !== "A") toggle(); });
-    c.addEventListener("keydown", function (e) {
-      if (e.target.tagName === "A") return; // Enter on the PR link follows the link
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
-    });
-    c.addEventListener("animationend", function (e) { ["in", "draw"].forEach(function (k) { e.target.classList.remove(k); }); });
-    c.dataset.num = String(t.number);
-    cards.set(t.number, c);
-    return c;
-  }
-
-  function detailFor(t, place) {
-    var box = el("div");
-    if (t.station === "queued") box.append(el("span", null, "Number " + place + " in line. It starts when an agent is free."));
-    else if (t.station === "skipped") box.append(el("span", null, "Skipped" + (t.summary ? ": " + t.summary : ".")));
-    else {
-      var line = el("span");
-      line.append(el("b", null, t.station === "done" ? "Finished " + hhmm(t.finishedAt) : t.steps + " steps so far"));
-      if (t.status) line.append(" · " + (STATUS[t.status] || t.status));
-      if (t.pr) {
-        line.append(" · ");
-        var a = el("a", null, t.pr.indexOf("/pull/") > 0 ? "PR #" + t.pr.split("/").pop() : t.pr);
-        if (t.pr.indexOf("https://") === 0) { a.href = t.pr; a.target = "_blank"; a.rel = "noreferrer"; }
-        line.append(a);
-      }
-      box.append(line);
-      if (t.summary && t.station === "done") box.append(el("span", null, t.summary));
-      if (t.recent.length) {
-        var ol = el("ol");
-        t.recent.forEach(function (s) { ol.append(el("li", null, s)); });
-        box.append(ol);
-      }
-    }
-    return box;
   }
 
 `;

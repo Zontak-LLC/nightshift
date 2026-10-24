@@ -1,183 +1,171 @@
 /**
- * The second half of the page script (see client.ts): painting tickets, the message line, Now, the run line, the keys
- * and the live connection. It closes the function client-start.ts opens.
+ * The last part of the page script (see client.ts): the header totals and NOW strip, the Terminal and Timeline tabs,
+ * the keys, the clocks and the live connection. It closes the function client-start.ts opens.
  */
-export const CLIENT_END = String.raw`  function paint(t, place, instant) {
-    var c = cardFor(t), open = openId === t.number;
-    var was = c.dataset.station;
-    c.className = "card " + t.station + (open ? " open" : "");
-    c.dataset.station = t.station;
-    c.setAttribute("aria-expanded", String(open));
-    c.querySelector(".name").textContent = t.title;
-    // No step for 30 minutes (a stopped or crashed agent): say so instead of looking busy.
-    var quiet = (t.station === "working" || t.station === "checking") && t.finishedAt && Date.now() - new Date(t.finishedAt).getTime() > 30 * 60000;
-    var paused = t.trouble && (t.station === "working" || t.station === "checking");
-    var step = c.querySelector(".step"), text = paused ? troubleLine(t.trouble) : quiet ? "Quiet since " + hhmm(t.finishedAt) : t.station === "checking" ? "Checking: " + (t.step || "") : t.step || "Starting";
-    c.classList.toggle("quiet", Boolean(quiet || paused));
-    if (step.textContent !== text) { step.textContent = text; if (!instant) restart(step, "in"); }
-    var code = c.querySelector(".code"), want = t.station === "done" || t.station === "skipped" ? codeOf(t) : "";
-    if (want && !code) { code = el("span", "code"); c.append(code); }
-    if (code) { code.textContent = want; code.hidden = !want; }
-    var top = c.querySelector(".top"), check = top.querySelector(".check");
-    if (t.station === "done" && !check) {
-      top.insertAdjacentHTML("afterbegin", '<svg class="check" viewBox="0 0 16 16" aria-label="done"><path d="M3 8.5l3.2 3L13 4.5"/></svg>');
-      if (!instant && was && was !== "done") top.querySelector(".check").classList.add("draw");
-    } else if (t.station !== "done" && check) check.remove();
-    var inner = c.querySelector(".detail-in");
-    inner.textContent = "";
-    if (open) inner.append(detailFor(t, place));
-  }
+export const CLIENT_END = String.raw`  function renderTop(view) {
+    document.title = "Night Shift · " + view.project;
+    ui.title.textContent = "Night Shift · " + view.project;
+    ui.where.textContent = [view.repo, view.folder, view.branch].filter(Boolean).join(" · ");
+    var run = view.run, tot = run ? shiftTotals(run.columns) : null;
+    ui.stats.done.value.textContent = tot ? tot.done + " / " + tot.total : "–";
+    ui.stats.merged.value.textContent = tot ? String(tot.merged) : "–";
+    ui.stats.skipped.value.textContent = tot ? String(tot.skipped) : "–";
+    ui.stats.avg.value.textContent = tot ? durationText(tot.avgMs) : "–";
+    var eta = tot ? finishEstimate(tot.avgMs, tot.left, Date.now()) : null;
+    ui.stats.eta.value.textContent = eta ? hhmm(new Date(eta).toISOString()) : tot && tot.total && !tot.left ? "done" : "–";
+    ui.stats.shift.value.dataset.since = run && run.startedAt ? run.startedAt : "";
 
-  /** The message line: the state of the run in one plain sentence. */
-  /** Trouble in plain words, with the reset time and how long until it for a usage limit. */
-  var WHY = { usage_limit: "Paused: usage limit", connection: "Waiting on Claude: connection trouble", login: "Logged out: run /login in Claude Code", api: "Stopped: an API error" };
-  function troubleLine(tr) {
-    var line = (WHY[tr.reason] || WHY.api) + " since " + hhmm(tr.since);
-    if (tr.resetsAt) {
-      var mins = Math.round((new Date(tr.resetsAt).getTime() - Date.now()) / 60000);
-      // Once the reset has passed, an interactive session waits for the person: say so instead of promising.
-      line += mins > 0
-        ? " · resets " + hhmm(tr.resetsAt) + " (in " + (mins >= 60 ? Math.floor(mins / 60) + " h " : "") + (mins % 60) + " min)"
-        : " · reset passed at " + hhmm(tr.resetsAt) + ": send a message to continue";
-    }
-    return line;
-  }
-
-  function messageFor(view) {
-    var alert = view.alerts && view.alerts[0];
+    var alert = view.alerts && view.alerts[0], lead = run ? run.columns.working[0] || run.columns.checking[0] : null;
+    ui.nowbar.className = "nowbar" + (alert ? " alert" : lead || view.now.length ? "" : " idle");
+    ui.nowTag.textContent = alert ? "STOPPED" : !lead && !view.now.length && tot && tot.total && !tot.left ? "DONE" : "NOW";
+    ui.nowWhat.textContent = "";
+    ui.nowStep.textContent = lead ? stepText(lead) : "";
+    ui.nowClock.dataset.since = lead && lead.startedAt ? lead.startedAt : "";
     if (alert) {
       var waiting = alert.reason === "usage_limit" && alert.resetsAt && new Date(alert.resetsAt).getTime() > Date.now();
-      return troubleLine(alert) + (waiting ? ". Nothing is lost; it can continue after the reset." : ".");
-    }
-    var run = view.run;
-    if (!run) return "No pipeline in this project. Sessions show under Now.";
-    var c = run.columns, busy = c.working.concat(c.checking).map(function (t) { return "#" + t.number; });
-    var total = c.done.length + c.queued.length + busy.length;
-    var parts = [busy.length ? busy.join(", ") + " in progress" : c.queued.length ? "Waiting for an agent" : "Run finished"];
-    parts.push(c.done.length + " of " + total + " done");
-    if (c.skipped.length) parts.push(c.skipped.length + " skipped");
-    if (run.lastAt) parts.push("last change " + hhmm(run.lastAt));
-    return parts.join(" · ");
+      ui.nowWhat.textContent = troubleLine(alert) + (waiting ? ". Nothing is lost; it can continue after the reset." : ".");
+      if (lead) ui.nowStep.textContent = "#" + lead.number;
+    } else if (lead) ui.nowWhat.append(el("span", "num", "#" + lead.number), " · " + lead.title);
+    else if (view.now.length) ui.nowWhat.textContent = view.now[0].who + " · " + view.now[0].what;
+    else if (tot && tot.total) ui.nowWhat.textContent = (tot.left ? "Waiting for an agent · " : "Run finished · ") + tot.done + " of " + tot.total + " done";
+    else ui.nowWhat.textContent = "Nothing running in this project. Steps show here as soon as a session starts.";
   }
 
-  /** A short result code, like a job status on a mainframe console. */
-  function codeOf(t) {
-    var map = { merged: "MRG", "partial-merged": "PART", "plan-posted": "PLAN", "draft-posted": "DRFT" };
-    if (t.station === "skipped") return "[SKIP]";
-    return "[" + (map[t.status] || (t.status || "done").slice(0, 4).toUpperCase()) + "]";
+  // ---- Terminal: one block per step, the running one marked ----
+  var SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", spinAt = 0, termKey = "";
+  function buildTerminal(panel) {
+    var w = el("div", "window"), bar = el("div", "titlebar");
+    ui.wtabs = el("div", "titlebar-tabs");
+    ui.wtabs.style.display = "flex";
+    ui.wtabs.style.gap = "2px";
+    ui.winClock = el("span", "clock");
+    bar.append(ui.wtabs, ui.winClock);
+    ui.blocks = el("div", "blocks");
+    ui.blocks.setAttribute("role", "log");
+    ui.blocks.setAttribute("aria-label", "What the agents are doing");
+    var input = el("div", "inputbar");
+    ui.inputText = el("span", "text");
+    ui.inputChip = el("span", "chip");
+    input.append(el("span", null, "❯"), ui.inputText, el("span", "cursor"), ui.inputChip);
+    w.append(bar, ui.blocks, input);
+    panel.append(w);
+  }
+  function block(time, who, cmd, running, where) {
+    var b = el("div", "blk" + (running ? " run" : "")), meta = el("div", "meta"), state = el("span");
+    if (running) { state.append(el("span", "spin", SPIN[0]), " running"); state.firstChild.dataset.spin = "1"; }
+    else state.append(el("span", "ok", "✓"));
+    meta.append(el("span", null, [time, who].filter(Boolean).join(" · ")), state);
+    var prompt = el("div", "prompt");
+    prompt.append(el("span", "cwd", where.folder || "~"), el("span", "br", where.branch || ""), el("span", "car", "❯"), el("span", "cmd", cmd));
+    b.append(meta, prompt);
+    return b;
+  }
+  function renderTerminal(view) {
+    var run = view.run, live = run ? run.columns.working.concat(run.columns.checking) : [];
+    var key = JSON.stringify([live.map(function (t) { return [t.number, t.recent, t.finishedAt]; }), view.now]);
+    ui.wtabs.textContent = "";
+    var on = el("span", "wtab on");
+    on.append(el("span", "dot"), live[0] ? "#" + live[0].number + " " + live[0].title.slice(0, 36) : view.project);
+    ui.wtabs.append(on);
+    (run ? run.columns.done.slice(-3).reverse() : []).forEach(function (t) { ui.wtabs.append(el("span", "wtab", "✓ #" + t.number)); });
+    var latest = live[0] ? live[0].step : view.now[0] ? view.now[0].what : "";
+    ui.inputText.textContent = latest || "waiting for the next step";
+    ui.inputChip.textContent = live[0] ? "ticket #" + live[0].number + " · " + live[0].station : view.branch || "idle";
+    if (key === termKey) return;
+    termKey = key;
+    var stick = ui.blocks.scrollHeight - ui.blocks.scrollTop - ui.blocks.clientHeight < 80;
+    ui.blocks.textContent = "";
+    var banner = el("div", "banner");
+    banner.append(el("b", null, "Night Shift"), " · " + view.project + (view.branch ? " · " + view.branch : ""));
+    ui.blocks.append(banner);
+    live.forEach(function (t) {
+      (t.recent || []).forEach(function (s, i, all) {
+        var lastOne = i === all.length - 1;
+        ui.blocks.append(block(lastOne ? hhmm(t.finishedAt) : "", "#" + t.number, s, lastOne && !t.trouble, view));
+      });
+    });
+    view.now.forEach(function (r) { if (r.who.charAt(0) !== "#") ui.blocks.append(block(hhmm(r.at), r.who, r.what, true, view)); });
+    if (ui.blocks.children.length === 1) ui.blocks.append(el("div", "banner", "No steps yet. They show here as the agents work."));
+    if (stick || !ui.blocks.dataset.seen) { ui.blocks.scrollTop = ui.blocks.scrollHeight; ui.blocks.dataset.seen = "1"; }
+  }
+
+  // ---- Timeline: one row per hour, a bar per ticket ----
+  function buildTimeline(panel) {
+    var box = el("div", "timeline"), head = el("div", "tl-head");
+    head.append(el("h3", null, "Timeline"), el("span", "eyebrow", "one row per hour · tickets in the order they ran"));
+    ui.tlSum = el("div", "tl-sum");
+    ui.hours = el("div", "hours");
+    var legend = el("div", "legend");
+    [["var(--live)", "working"], ["var(--done)", "done"], ["var(--line-strong)", "skipped"]].forEach(function (k) {
+      var s = el("span"), i = el("i");
+      i.style.background = k[0];
+      s.append(i, k[1]);
+      legend.append(s);
+    });
+    box.append(head, ui.tlSum, ui.hours, legend);
+    panel.append(box);
+  }
+  function renderTimeline(view) {
+    var run = view.run, nowMs = Date.now();
+    ui.hours.textContent = "";
+    ui.tlSum.textContent = "";
+    if (!run || !run.startedAt) { ui.hours.append(el("p", "empty", "No pipeline has run in this project yet.")); return; }
+    var tot = shiftTotals(run.columns), parts = [["On shift", durationText(nowMs - new Date(run.startedAt).getTime())], ["Done", tot.done + " of " + tot.total], ["Average", durationText(tot.avgMs)]];
+    if (tot.longest) parts.push(["Longest", "#" + tot.longest.number + " · " + durationText(tot.longest.ms)]);
+    parts.forEach(function (p) { var s = el("span"); s.append(p[0] + " ", el("b", null, p[1])); ui.tlSum.append(s); });
+    var headRow = el("div", "hr head"), marks = el("div");
+    [":00", ":15", ":30", ":45"].forEach(function (m) { marks.append(el("span", null, m)); });
+    headRow.append(el("span"), marks);
+    ui.hours.append(headRow);
+    hourRows(new Date(run.startedAt).getTime(), nowMs, segmentsOf(run.columns, nowMs)).forEach(function (r) {
+      var row = el("div", "hr"), lane = el("div", "row");
+      r.bars.forEach(function (b) {
+        var bar = el("span", "bar " + b.kind, b.first && b.width > 5 ? b.label : "");
+        bar.style.left = b.left + "%";
+        bar.style.width = b.width + "%";
+        bar.title = b.label;
+        bar.addEventListener("click", function () { openTicket(b.num); });
+        lane.append(bar);
+      });
+      if (r.nowAt !== null) { var line = el("span", "nowline"); line.style.left = r.nowAt + "%"; lane.append(line); }
+      row.append(el("span", null, hhmm(new Date(r.at).toISOString())), lane);
+      ui.hours.append(row);
+    });
   }
 
   function render(view, instant) {
     if (!built) build();
     last = view;
-    document.title = "Night Shift · " + view.project;
-    var where = root.querySelector(".where");
-    where.textContent = "";
-    [["REPO", view.repo], ["FOLDER", view.folder], ["BRANCH", view.branch]].forEach(function (f) {
-      if (!f[1]) return;
-      var field = el("span", "field");
-      field.append(el("b", null, f[0]), " " + f[1]);
-      where.append(field);
-    });
-    var message = root.querySelector(".message");
-    message.textContent = messageFor(view);
-    message.classList.toggle("alert", Boolean(view.alerts && view.alerts.length));
-    var active = document.activeElement && document.activeElement.closest ? document.activeElement.closest(".card") : null;
-    var keep = active ? Number(active.dataset.num) : null;
-    var before = new Map();
-    cards.forEach(function (c, n) { before.set(n, c.getBoundingClientRect()); });
-    var seen = new Set(), cols = view.run ? view.run.columns : null;
-    STATIONS.forEach(function (s) {
-      var list = cols ? cols[s[0]] : [];
-      list.forEach(function (t, i) {
-        seen.add(t.number);
-        paint(t, i + 1, instant);
-        var c = cardFor(t);
-        if (lists[s[0]].children[i] !== c) lists[s[0]].insertBefore(c, lists[s[0]].children[i] || null);
-      });
-      var n = String(list.length);
-      if (counts[s[0]].textContent !== n) { counts[s[0]].textContent = n; if (!instant) restart(counts[s[0]], "roll"); }
-    });
-    cards.forEach(function (c, n) { if (!seen.has(n)) { c.remove(); cards.delete(n); } });
-    if (!instant) cards.forEach(function (c, n) {
-      var a = before.get(n);
-      if (!a || !a.width) return;
-      var b = c.getBoundingClientRect(), dx = a.left - b.left, dy = a.top - b.top;
-      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-      c.animate([{ transform: "translate(" + dx + "px," + dy + "px)" }, { transform: "none" }], { duration: Math.abs(dx) > 20 ? 700 : 450, easing: "cubic-bezier(.2,.8,.2,1)" });
-    });
-    if (keep !== null && cards.get(keep) && document.activeElement !== cards.get(keep)) cards.get(keep).focus({ preventScroll: true });
-    root.querySelectorAll(".col").forEach(fade);
-    renderNow(view.now);
-    renderNight(view);
+    renderTop(view);
+    renderBoard(view, instant);
+    renderTerminal(view);
+    if (!ui.panels.timeline.hidden) renderTimeline(view);
+    tick();
   }
 
-  function renderNow(rows) {
-    var now = root.querySelector(".now");
-    now.textContent = "";
-    now.append(el("span", "frame-title", "NOW"));
-    if (!rows.length) { now.append(el("div", "agent", "Nothing running right now.")); return; }
-    rows.forEach(function (r, i) {
-      var a = el("div", "agent");
-      var what = el("div", "what", "> " + r.what);
-      a.append(el("div", "who", r.who + (r.at ? " · " + hhmm(r.at) : "")), what);
-      now.append(a);
-    });
+  // ---- the clocks: every second, from the start times the board already holds ----
+  function tick() {
+    if (!built) return;
+    root.querySelectorAll("[data-since]").forEach(function (n) { n.textContent = n.dataset.since ? since(n.dataset.since) : n.closest(".stat") ? "–" : ""; });
+    ui.winClock.textContent = new Date().toLocaleTimeString([], { hour12: false });
   }
 
-  function renderNight(view) {
-    var run = view.run, start = run && run.startedAt ? new Date(run.startedAt).getTime() : null;
-    var nowMs = Date.now(), end = start ? Math.max(nowMs, start + 3600e3) : nowMs;
-    root.querySelector(".clock").textContent = hhmm(new Date(nowMs).toISOString());
-    root.querySelector(".date").textContent = new Date(nowMs).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-    var done = run ? run.columns.done.length : 0, total = run ? done + run.columns.queued.length + run.columns.working.length + run.columns.checking.length : 0;
-    var mins = start ? Math.round((nowMs - start) / 60000) : 0;
-    var cells = 32, filled = total ? Math.round((done / total) * cells) : 0;
-    root.querySelector(".meter").textContent = start ? "[" + "█".repeat(filled) + "░".repeat(cells - filled) + "] " + done + "/" + total + " done" : "";
-    root.querySelector(".so-far").textContent = start
-      ? "started " + hhmm(run.startedAt) + " · " + Math.floor(mins / 60) + "h " + String(mins % 60).padStart(2, "0") + "m so far"
-      : "No pipeline running in this project";
-    var pct = function (ms) { return start ? Math.min(100, Math.max(0, ((ms - start) / (end - start)) * 100)) + "%" : "0%"; };
-    root.querySelector(".fill").style.width = pct(nowMs);
-    var track = root.querySelector(".track"), hours = root.querySelector(".hours");
-    track.querySelectorAll(".tick").forEach(function (t) { t.remove(); });
-    hours.textContent = "";
-    if (start) {
-      var h = new Date(start); h.setMinutes(0, 0, 0);
-      for (var t = h.getTime() + 3600e3; t < end; t += 3600e3) {
-        var k = el("span", "tick"); k.style.left = pct(t); track.append(k);
-        var l = el("span", null, hhmm(new Date(t).toISOString())); l.style.left = pct(t); hours.append(l);
-      }
-    }
-    var keep = new Set();
-    (run ? run.columns.done : []).forEach(function (t) {
-      if (!t.finishedAt) return;
-      keep.add(String(t.number));
-      var dot = track.querySelector('[data-t="' + t.number + '"]');
-      if (!dot) { dot = el("span", "landed pop"); dot.dataset.t = String(t.number); track.append(dot); }
-      dot.style.left = pct(new Date(t.finishedAt).getTime());
-      dot.title = "#" + t.number + " done at " + hhmm(t.finishedAt);
-    });
-    track.querySelectorAll(".landed").forEach(function (d) { if (!keep.has(d.dataset.t)) d.remove(); });
-  }
-
-  // ---- the keys in the bar at the foot: arrows move between tickets, Enter opens (on the card), Esc closes ----
+  // ---- keys: arrows move between tickets, Enter opens (on the card), Esc closes the dialog ----
   document.addEventListener("keydown", function (e) {
     var arrows = ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"];
-    if (e.key === "Escape" && openId !== null) { openId = null; if (last) render(last, true); return; }
-    if (arrows.indexOf(e.key) < 0 || e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return; // leave Back, Cmd+arrow alone
+    if (arrows.indexOf(e.key) < 0 || e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || (ui.dialog && ui.dialog.open)) return;
     var c = document.activeElement && document.activeElement.closest ? document.activeElement.closest(".card") : null;
     var first = root.querySelector(".card");
-    // With nothing focused, the first arrow focuses the first ticket; anywhere else (a link, a field) arrows stay normal.
-    if (!c) { if (first && document.activeElement === document.body) { e.preventDefault(); first.focus(); } return; }
+    // With nothing focused, the first arrow focuses the first ticket; anywhere else (a tab, a link) arrows stay normal.
+    if (!c) { if (first && document.activeElement === document.body && !ui.panels.board.hidden) { e.preventDefault(); first.focus(); } return; }
     var list = c.parentElement, i = Array.prototype.indexOf.call(list.children, c);
-    var cols = Array.prototype.slice.call(root.querySelectorAll(".list")), ci = cols.indexOf(list), target = null;
+    var all = Array.prototype.slice.call(root.querySelectorAll(".list")), ci = all.indexOf(list), target = null;
     if (e.key === "ArrowDown") target = list.children[i + 1];
     else if (e.key === "ArrowUp") target = list.children[i - 1];
     else {
       var dir = e.key === "ArrowRight" ? 1 : -1;
-      for (var k = ci + dir; k >= 0 && k < cols.length && !target; k += dir) {
-        if (cols[k].children.length) target = cols[k].children[Math.min(i, cols[k].children.length - 1)];
+      for (var k = ci + dir; k >= 0 && k < all.length && !target; k += dir) {
+        if (all[k].children.length) target = all[k].children[Math.min(i, all[k].children.length - 1)];
       }
     }
     e.preventDefault();
@@ -189,13 +177,15 @@ export const CLIENT_END = String.raw`  function paint(t, place, instant) {
   source.addEventListener("projects", function (e) { renderProjects(JSON.parse(e.data)); });
   source.addEventListener("board", function (e) { render(JSON.parse(e.data), !last); });
   function connection(live) {
-    var c = root.querySelector(".conn");
-    if (!c) return;
-    c.querySelector(".conn-text").textContent = live ? "LIVE" : "RECONNECTING…";
-    c.classList.toggle("off", !live);
+    if (!ui.conn) return;
+    ui.connText.textContent = live ? "LIVE" : "RECONNECTING…";
+    ui.conn.classList.toggle("off", !live);
+    root.querySelector(".top").classList.toggle("off", !live);
   }
   source.onopen = function () { connection(true); };
   source.onerror = function () { connection(false); };
-  setInterval(function () { if (last) renderNight(last); }, 15000);
+  setInterval(tick, 1000);
+  setInterval(function () { spinAt = (spinAt + 1) % SPIN.length; root.querySelectorAll("[data-spin]").forEach(function (n) { n.textContent = SPIN[spinAt]; }); }, 120);
+  setInterval(function () { if (last && built) { renderTop(last); if (!ui.panels.timeline.hidden) renderTimeline(last); } }, 15000);
 })();
 `;
