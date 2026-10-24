@@ -108,3 +108,8 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
 - **Working or finished:** an agent is "working" until its turn ends with an answer (`stop_reason: end_turn`) or it has
   been quiet for 10 minutes. Agents quiet for 6 hours leave the board. Old agent files quiet at start are not read, so
   history is not shown as live.
+
+- **Usage meter in the header (2026-10-24, the owner).** Read from `~/.claude/usage-now.json`, polled every 30 s, shown as
+  two 10-segment bars; amber from 75% and red from 90% (the owner's warning line); grey "stale" after 15 minutes;
+  hidden without the file. The page works out staleness with its own clock, so a file that stops updating turns grey
+  without any new push.

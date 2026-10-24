@@ -20,7 +20,8 @@ export function usage(version: string): string {
     "  nightshift -h, --help       show this help",
     "",
     "Settings: NIGHTSHIFT_PORT (default 4400), NIGHTSHIFT_LOGS (default ~/.claude/projects),",
-    "NIGHTSHIFT_DATA (where the history is kept, default ~/.nightshift), NIGHTSHIFT_KEEP_DAYS (default 30).",
+    "NIGHTSHIFT_DATA (where the history is kept, default ~/.nightshift), NIGHTSHIFT_KEEP_DAYS (default 30),",
+    "NIGHTSHIFT_USAGE (the usage meter's JSON file, default ~/.claude/usage-now.json).",
     "",
     "Night Shift only reads Claude Code's log files. Nothing leaves your computer.",
   ].join("\n");

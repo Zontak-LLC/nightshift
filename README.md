@@ -25,6 +25,14 @@ Settings: `NIGHTSHIFT_PORT` (default 4400), `NIGHTSHIFT_LOGS` (default `~/.claud
 (where the history is kept, default `~/.nightshift`) and `NIGHTSHIFT_KEEP_DAYS` (default 30). The service listens
 on 127.0.0.1 only.
 
+## Usage meter
+
+The header shows two small meters read from `~/.claude/usage-now.json` (change the place with `NIGHTSHIFT_USAGE`),
+looked at every 30 seconds: `5 h  31% · resets 06:40` and `Week 52%`, ten segments each, amber from 75% and red from
+90%. They turn grey and say "stale" when the file is older than 15 minutes, and they are hidden when the file is
+missing. The file is `{"five_hour": 31, "seven_day": 52, "five_hour_resets_at": <unix seconds>, "updated": "<ISO time>"}`.
+Times show in the browser's local time.
+
 ## History
 
 Night Shift keeps what it saw in one SQLite file (`~/.nightshift/nightshift.db`). Stop and start it: the board comes

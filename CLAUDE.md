@@ -36,6 +36,9 @@ before changing anything; update both in the same commit when a choice changes.
 - Trouble (ticket 5): `parser/trouble.ts` turns Claude Code's `isApiErrorMessage` lines into `session.trouble` (reason,
   `resetsAt`, limit type); the board keeps it on the session or the agent's ticket until the next real step and lists it
   as `alerts` in the view; the page's NOW strip shows the newest one in amber; a late step of a finished ticket only fills in its times.
+- Usage meter: `src/meter.ts` reads `~/.claude/usage-now.json` (`parseMeter`, `startMeter` polls every 30 s; read
+  only); the CLI adds it to each board payload as `meter`; `meterView` in `web/shift.ts` (tested, sent to the page)
+  makes the segments, levels (amber 75, red 90) and the stale flag (15 min); `server.refresh()` re-pushes every 30 s.
 - `src/cli.ts` wires them together (`src/terminal.ts` is the terminal view: one line per step, titles and pull
   requests printed once per session, local time); `test/` holds the scenario tests and `test/fixtures/` real-shaped sample logs.
 
