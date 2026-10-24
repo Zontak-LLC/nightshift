@@ -1,6 +1,6 @@
 # Night Shift: specification
 
-Version 0.4 · 2026-10-23 · Owner: Denis Zontak · Status: draft, being shaped by conversation
+Version 0.5 · 2026-10-23 · Owner: Denis Zontak · Status: draft, being shaped by conversation
 
 ## 1. One sentence
 
@@ -84,10 +84,16 @@ Claude Code log files ──► Watcher ──► Parser ──► Event store (
 
 ## 8. How it should look and feel
 
-- Calm, like UseHourly v4: dark by default (a deep blue slate, not black), one soft accent, a monospace font for commands and file names.
-- One animation at a time: only the card that just changed moves.
-- Glanceable from across the room: the "Now" row is large; detail is one click away.
-- No brown, no glow on black.
+- **Readable for hours** (decided 2026-10-24, see `decisions.md`): dark grey-blue, soft off-white text, colour only with a
+  meaning (blue live, green done, amber needs attention), sans titles and monospace machine output.
+- **Laid out like CICS / Norton Commander:** a top line with the date, time and a status light; labelled fields; framed
+  areas with their title in the frame; a message line that says the state in one sentence; a Key=Action line, and the
+  keys work (arrows move between tickets and columns, Enter opens, Esc closes).
+- One fixed board height; finished and waiting tickets are one-line rows with a result code (`[MRG]`, `[PART]`, `[PLAN]`,
+  `[DRFT]`, `[SKIP]`); a click opens a ticket in place; a full column scrolls inside itself with "+N more".
+- Motion only where it explains a change (a ticket gliding to its new column, a step rolling over). Nothing loops except
+  the status light's slow blink. Reduced motion turns all of it off.
+- No brown, no glow, no pure black.
 
 ## 9. How we know it works (scenarios)
 
@@ -142,6 +148,7 @@ Claude writes most of the code; these keep it from drifting into a mess on a lon
 ## 13. Change log
 
 - 0.1 (2026-10-23): first draft from the conversation: Claude Code logs only in v1, GitHub with CI, Node.js + TypeScript, SSE, SQLite, local page, Rule 1 and the guardrails.
+- 0.5 (2026-10-24): the board is built and watches a real pipeline (its journal and its agents' logs); the owner chose the look (section 8).
 - 0.4 (2026-10-23): a board per project at its own address, as many open at once as you like; a start page lists the active ones.
 - 0.3 (2026-10-23): Night run planned for version 2: all night by default, an optional ticket limit with "Start next batch", pause on usage limit.
 - 0.2 (2026-10-23): it is for any developer, not only me: install with `npx nightshift`, find the logs on any OS, a first-run screen, an optional config file, nothing leaves the computer; team board moved to the open questions.

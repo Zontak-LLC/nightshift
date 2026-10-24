@@ -8,7 +8,7 @@ export const LAYERS: Record<string, string[]> = {
   parser: [],
   watcher: ["parser"],
   store: ["parser"],
-  server: ["store", "parser"],
+  server: ["store", "parser", "web"],
   web: [],
 };
 

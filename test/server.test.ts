@@ -15,7 +15,21 @@ describe("the live stream", () => {
       const { value } = (await reader?.read()) ?? {};
       expect(new TextDecoder().decode(value)).toContain('"text":"hello"');
       await reader?.cancel();
-      expect((await fetch(`http://127.0.0.1:${server.port}/nope`)).status).toBe(404);
+      expect((await fetch(`http://127.0.0.1:${server.port}/no/such/page`)).status).toBe(404);
+      // A path the URL parser refuses ("//") is a plain 400, never a crash of the whole tool.
+      const raw = await new Promise<number>((resolve, reject) => {
+        const req = request(
+          { host: "127.0.0.1", port: server.port, path: "//", headers: { host: `127.0.0.1:${server.port}` } },
+          (r) => {
+            r.resume();
+            resolve(r.statusCode ?? 0);
+          },
+        );
+        req.on("error", reject);
+        req.end();
+      });
+      expect(raw).toBe(400);
+      expect((await fetch(`http://127.0.0.1:${server.port}/health`)).status).toBe(200); // still up
     } finally {
       await server.close();
     }
@@ -52,5 +66,37 @@ describe("the live stream", () => {
     ).not.toThrow();
     await server.close();
     expect(() => server.publish({ kind: "prompt", at: "t", sessionId: "s", text: "after close" })).not.toThrow();
+  });
+
+  it("serves the board page, and pushes each open board its project's state when something changes", async () => {
+    let version = 1;
+    const server = await startServer(0, {
+      view: (project) => ({ project, version }),
+      projects: () => [{ project: "demo-app" }],
+    });
+    try {
+      const page = await (await fetch(`http://127.0.0.1:${server.port}/demo-app`)).text();
+      expect(page).toContain("<title>Night Shift</title>");
+      // The page loads nothing from the internet: no script, style, font or image from another host.
+      expect(page).not.toMatch(/(?:src|href)=["']?https?:|url\(["']?https?:|@import/);
+      const res = await fetch(`http://127.0.0.1:${server.port}/events?project=demo-app`);
+      const reader = res.body?.getReader();
+      const decode = new TextDecoder();
+      let text = "";
+      const until = async (want: string) => {
+        while (!text.includes(want)) text += decode.decode((await reader?.read())?.value);
+      };
+      await until('"version":1');
+      expect(text).toContain("event: board");
+      version = 2;
+      server.publish({ kind: "prompt", at: "t", sessionId: "s", text: "something changed" });
+      await until('"version":2');
+      const start = await fetch(`http://127.0.0.1:${server.port}/events?project=`);
+      const first = decode.decode((await start.body?.getReader().read())?.value);
+      expect(first).toContain(": connected");
+      await reader?.cancel();
+    } finally {
+      await server.close();
+    }
   });
 });

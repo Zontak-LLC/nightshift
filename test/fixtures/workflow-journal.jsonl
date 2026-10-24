@@ -1,0 +1,8 @@
+{"type":"launched"}
+{"type":"started","key":"v2:a","agentId":"agent-rank","label":"rank open tickets","phase":"Rank"}
+{"type":"result","key":"v2:a","agentId":"agent-rank","result":{"tickets":[{"number":11,"title":"Fix the login redirect","priority":"high"},{"number":12,"title":"Export timesheets as CSV"},{"number":13,"title":"Dark mode toggle in the header"}]}}
+{"type":"started","key":"v2:b","agentId":"agent-11","label":"#11 Fix the login redirect","phase":"Fix"}
+{"type":"result","key":"v2:b","agentId":"agent-11","result":{"number":11,"status":"merged","pr":"https://github.com/example/demo-app/pull/41","summary":"The redirect now keeps the page the person asked for. Two tests cover it."}}
+{"type":"started","key":"v2:c","agentId":"agent-12","label":"#12 Export timesheets as CSV","phase":"Fix"}
+{"type":"result","key":"v2:c","agentId":"agent-12","result":{"number":12,"status":"skipped","summary":"Needs the owner's decision on the column order."}}
+{"type":"started","key":"v2:d","agentId":"agent-13","label":"#13 Dark mode toggle in the header","phase":"Fix"}
