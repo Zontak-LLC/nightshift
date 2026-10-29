@@ -37,6 +37,8 @@ async function start(): Promise<void> {
   const { board } = engine;
   const meter = startMeter(process.env.NIGHTSHIFT_USAGE || join(homedir(), ".claude", "usage-now.json"));
   const pinnedFile = join(dataDir, "projects.json");
+  /** A path as the board shows it: the home folder as `~`. */
+  const tilde = (path: string) => (path.startsWith(homedir()) ? `~${path.slice(homedir().length)}` : path);
   let lastWarning = "";
   const warn = (message: string) => {
     if (message === lastWarning) return; // the list is read on every push; say a problem once
@@ -58,7 +60,7 @@ async function start(): Promise<void> {
     view: (project) => {
       const view = board.view(project);
       const home = homedir();
-      const folder = view.folder?.startsWith(home) ? `~${view.folder.slice(home.length)}` : view.folder;
+      const folder = view.folder && tilde(view.folder);
       const pinned = loadPinned(pinnedFile, warn);
       const name = pinned.find((p) => basename(expand(p.path, home)) === project)?.name ?? project;
       const site = watchSiteOf(pinned, project, home);
@@ -72,12 +74,16 @@ async function start(): Promise<void> {
       };
     },
     projects: tiles,
+    agents: () => {
+      const desks = board.desks(Date.now());
+      return { ...desks, agents: desks.agents.map((d) => ({ ...d, folder: tilde(d.folder), repo: repoOf(d.folder) })) };
+    },
   });
   publish = server.publish;
   refresh = server.refresh;
   setInterval(server.refresh, 30_000).unref(); // the meter changes without any event
   console.info(
-    `Night Shift ${pkg.version} · watching ${root}\nHistory: ${join(dataDir, "nightshift.db")} (${keepDays} days)\nBoard: http://localhost:${server.port}/\n`,
+    `Night Shift ${pkg.version} · watching ${root}\nHistory: ${join(dataDir, "nightshift.db")} (${keepDays} days)\nBoard: http://localhost:${server.port}/\nDesks: http://localhost:${server.port}/agents\n`,
   );
   const quit = async () => {
     engine.stop();

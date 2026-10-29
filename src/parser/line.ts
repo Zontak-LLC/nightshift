@@ -3,6 +3,7 @@ import { pathsOf } from "./paths.js";
 import { redact } from "./redact.js";
 import { toolSummary } from "./summary.js";
 import { troubleOf } from "./trouble.js";
+import { usageOf } from "./usage.js";
 
 type Raw = Record<string, unknown>;
 type Block = Record<string, unknown>;
@@ -56,7 +57,8 @@ function assistantEvents(raw: Raw, at: string, sessionId: string): NightEvent[] 
     else if (b.type === "text" && str(b.text).trim())
       out.push({ kind: "reply", at, sessionId, text: firstLine(str(b.text)) });
   }
-  return out;
+  const usage = usageOf(raw, at, sessionId);
+  return usage ? [...out, usage] : out;
 }
 
 function userEvents(raw: Raw, at: string, sessionId: string): NightEvent[] {

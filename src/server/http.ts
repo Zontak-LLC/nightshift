@@ -15,6 +15,8 @@ export type NightServer = {
 export type BoardSource = {
   view: (project: string) => unknown;
   projects: () => unknown;
+  /** Every live agent as Motherboard's desks (board-kit's `Agents` part), for `GET /agents`. */
+  agents?: () => unknown;
   /** Where Night Watch's page is, for the "→ Night Watch" links. */
   watchUrl?: string;
 };
@@ -35,7 +37,8 @@ function fromThisComputer(req: IncomingMessage, port: number): boolean {
 }
 
 /**
- * The local server: `/events` streams every new event to the open pages (Server-Sent Events), `/health` answers ok.
+ * The local server: `/events` streams every new event to the open pages (Server-Sent Events), `/health` answers ok,
+ * `/agents` returns the live agents as JSON for Motherboard.
  * It listens on 127.0.0.1 only and answers only requests addressed to this computer. No CORS headers on purpose.
  */
 export function startServer(port: number, source?: BoardSource): Promise<NightServer> {
@@ -80,6 +83,15 @@ export function startServer(port: number, source?: BoardSource): Promise<NightSe
     }
     if (url.pathname === "/health") {
       res.writeHead(200, { "content-type": "application/json" }).end('{"ok":true}');
+      return;
+    }
+    if (url.pathname === "/agents" && source?.agents) {
+      // Read only, pulled by Motherboard's server side; no CORS headers, so no page on another origin can read it.
+      if (req.method !== "GET") res.writeHead(405, { allow: "GET", "content-type": "text/plain" }).end("Read only");
+      else
+        res
+          .writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
+          .end(JSON.stringify(source.agents()));
       return;
     }
     if (req.method === "GET" && /^\/[^/]*$/.test(url.pathname) && url.pathname !== "/favicon.ico") {

@@ -156,3 +156,19 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
     not move left to right. Open ones (any severity, colour by severity) and the five newest resolved ones. The advice is
     the fix Night Watch proposes, else the first triage step. "Healed by" needs a fix attempt with the verdict "healed".
   - Ruled out: buttons that act on Night Watch (resolve, retriage, open an issue). Those stay in Night Watch.
+
+## Motherboard's Desks (issue 15, 2026-10-29)
+
+- **Pull, not push.** Motherboard reads `GET /agents`; Night Shift never sends anything anywhere. It is the same
+  pattern as the rest of the server (127.0.0.1 only, the Host check against DNS rebinding) and needs no address,
+  token or retry logic on our side. A stream (SSE) can come later if a pull every few seconds is not enough.
+- **No CORS on purpose.** The payload lists what every agent is doing. Without CORS headers no page on another origin
+  can read it, so Motherboard's server side must do the pull. That is intended.
+- **Tokens only, no dollars** (the owner, 2026-10-29). The owner is on a flat plan, so per-token prices would mislead,
+  and a price table needs upkeep. Each desk shows its tokens (total, input, output, cache read, cache write) and the
+  contract's `cost` is always null, never 0. Tokens come from `message.usage` of assistant lines (`turn.usage`); Claude
+  Code repeats one message's usage on each of its lines, so the store keeps the last line per `message.id`. History
+  stored before this change has no `turn.usage`: those desks show tokens as unknown (null).
+- **One file knows the contract** (`store/desks.ts`), so a change in board-kit's `Agents` is one place to follow.
+  Live = as on the board: active, or seen in the last 6 hours and idle. Waiting for the owner (trouble, or an
+  `AskUserQuestion` with no answer yet) sorts first. At most 50 desks.

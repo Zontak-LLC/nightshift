@@ -21,7 +21,7 @@ export type AgentRow = {
   parent: string;
 };
 type Vote = { n: number; worktree: boolean };
-type Worker = {
+export type Worker = {
   agentId: string;
   parent: string;
   cwd: string;
@@ -40,7 +40,7 @@ export type Place = { project: string; folder: string; worktree: boolean };
 /** An agent quiet for this long is no longer "working" (the log has no end marker when a run is cut off). */
 export const QUIET_MS = 10 * 60_000;
 /** Agents quieter than this are left off the board. */
-const KEEP_MS = 6 * 3600_000;
+export const KEEP_MS = 6 * 3600_000;
 const SHOWN = 20;
 const RECENT = 4;
 const NAME_LENGTH = 32;
@@ -122,7 +122,7 @@ export class Workers {
   }
 
   /** The agents worth showing (they took a step recently), each with its place. */
-  private live(nowMs: number, skip: (agentId: string) => boolean): { w: Worker; place: Place }[] {
+  live(nowMs: number, skip: (agentId: string) => boolean): { w: Worker; place: Place }[] {
     const out: { w: Worker; place: Place }[] = [];
     for (const w of this.all.values()) {
       const at = Date.parse(w.lastAt);

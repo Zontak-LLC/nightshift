@@ -19,6 +19,16 @@ export type NightEvent =
   /** An agent's turn ended with an answer (not a tool call): it is done until its next step. */
   | (Base & { kind: "turn.end" })
   | (Base & { kind: "pr.link"; number: number; url: string })
+  /** The tokens one assistant message used, and its model; the same `messageId` again replaces it (parser/usage.ts). */
+  | (Base & {
+      kind: "turn.usage";
+      messageId: string;
+      model: string;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      cacheWriteTokens: number;
+    })
   /** The API refused or broke off: a usage limit (with its reset time), a lost connection, an expired login. */
   | (Base & {
       kind: "session.trouble";
