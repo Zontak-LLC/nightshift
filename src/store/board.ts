@@ -253,9 +253,9 @@ export class Board {
   }
 
   /** One desk per live agent on this computer, for Motherboard's Agents tab (`GET /agents`, see desks.ts). */
-  desks(nowMs = Date.now()): DesksView {
+  desks(nowMs = Date.now(), home = ""): DesksView {
     const { sessions, runs, workers, log } = this;
-    return desksOf({ sessions, runs, workers, log, isPipeline: (id) => this.agents.has(id) }, nowMs);
+    return desksOf({ sessions, runs, workers, log, home, isPipeline: (id) => this.agents.has(id) }, nowMs);
   }
 
   /** One project's board: its newest session's place, what is happening now, and its newest pipeline run. */

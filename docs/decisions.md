@@ -171,4 +171,8 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
   stored before this change has no `turn.usage`: those desks show tokens as unknown (null).
 - **One file knows the contract** (`store/desks.ts`), so a change in board-kit's `Agents` is one place to follow.
   Live = as on the board: active, or seen in the last 6 hours and idle. Waiting for the owner (trouble, or an
-  `AskUserQuestion` with no answer yet) sorts first. At most 50 desks.
+  `AskUserQuestion` with no answer yet) sorts first. At most 50 desks. A pipeline desk uses its own agent's newest
+  line, never the run's (another ticket's steps must not keep a stalled agent active). The store shows the home
+  folder as `~`, so the CLI sends `board.desks()` as it is, with no extra fields.
+- **Open (issue 15):** the field names are not yet matched to board-kit's `src/contract.ts`; it could not be read from
+  the build sandbox. Match them, pin the board-kit commit in `store/desks.ts`, and test against a copied fixture.

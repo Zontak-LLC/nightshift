@@ -7,7 +7,7 @@ import { startEngine } from "./engine.js";
 import { startMeter } from "./meter.js";
 import type { NightEvent, RunEvent } from "./parser/index.js";
 import { startServer } from "./server/index.js";
-import { DEFAULT_KEEP_DAYS, expand, loadPinned, projectTiles, repoOf, watchSiteOf } from "./store/index.js";
+import { DEFAULT_KEEP_DAYS, expand, loadPinned, projectTiles, repoOf, tilde, watchSiteOf } from "./store/index.js";
 import { terminalPrinter } from "./terminal.js";
 import { parseArgs, usage } from "./usage.js";
 import { localWatchUrl, startWatchClient, watchOnBoard, watchOnTile } from "./watch/index.js";
@@ -37,8 +37,6 @@ async function start(): Promise<void> {
   const { board } = engine;
   const meter = startMeter(process.env.NIGHTSHIFT_USAGE || join(homedir(), ".claude", "usage-now.json"));
   const pinnedFile = join(dataDir, "projects.json");
-  /** A path as the board shows it: the home folder as `~`. */
-  const tilde = (path: string) => (path.startsWith(homedir()) ? `~${path.slice(homedir().length)}` : path);
   let lastWarning = "";
   const warn = (message: string) => {
     if (message === lastWarning) return; // the list is read on every push; say a problem once
@@ -60,7 +58,7 @@ async function start(): Promise<void> {
     view: (project) => {
       const view = board.view(project);
       const home = homedir();
-      const folder = view.folder && tilde(view.folder);
+      const folder = view.folder && tilde(view.folder, home);
       const pinned = loadPinned(pinnedFile, warn);
       const name = pinned.find((p) => basename(expand(p.path, home)) === project)?.name ?? project;
       const site = watchSiteOf(pinned, project, home);
@@ -74,10 +72,7 @@ async function start(): Promise<void> {
       };
     },
     projects: tiles,
-    agents: () => {
-      const desks = board.desks(Date.now());
-      return { ...desks, agents: desks.agents.map((d) => ({ ...d, folder: tilde(d.folder), repo: repoOf(d.folder) })) };
-    },
+    agents: () => board.desks(Date.now(), homedir()),
   });
   publish = server.publish;
   refresh = server.refresh;

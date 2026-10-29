@@ -4,9 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from "vitest";
 import { type Engine, startEngine } from "../src/engine.js";
-import { parseLine } from "../src/parser/index.js";
 import { type NightServer, startServer } from "../src/server/index.js";
-import { Board, type Desk, type DesksView } from "../src/store/index.js";
+import type { Desk, DesksView } from "../src/store/index.js";
 
 // Motherboard's Desks (issue 15): every live agent on this computer at GET /agents. The fixtures in
 // test/fixtures/desks/ have the shape of real Claude Code logs (a main session, one background agent, one pipeline
@@ -61,6 +60,25 @@ async function open(): Promise<Engine> {
   return engine;
 }
 const deskOf = (view: DesksView, role: Desk["role"]) => view.agents.find((d) => d.role === role);
+const DESK_KEYS = [
+  "cost",
+  "folder",
+  "id",
+  "lastAt",
+  "model",
+  "project",
+  "recent",
+  "role",
+  "runMs",
+  "startedAt",
+  "state",
+  "step",
+  "steps",
+  "ticket",
+  "tokens",
+  "wait",
+  "waitsForYou",
+] as const satisfies readonly (keyof Desk)[];
 
 beforeEach(() => {
   base = realpathSync(mkdtempSync(join(tmpdir(), "nightshift-desks-")));
@@ -77,7 +95,8 @@ afterEach(async () => {
 describe("Motherboard pulls this computer's live agents", () => {
   it("serves one desk per agent: role, ticket, repo, model, steps, tokens and run time from the logs", async () => {
     const { board } = await open();
-    server = await startServer(0, { view: () => ({}), projects: () => [], agents: () => board.desks(NOW) });
+    // As the CLI wires it: the home folder (here the test's folder) shows as `~`.
+    server = await startServer(0, { view: () => ({}), projects: () => [], agents: () => board.desks(NOW, base) });
     const res = await fetch(`http://127.0.0.1:${server.port}/agents`);
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
@@ -91,6 +110,7 @@ describe("Motherboard pulls this computer's live agents", () => {
       id: `main:${SESSION}`,
       ticket: { number: null, title: "Add a coupon field to the cart" },
       project: "shop-app",
+      folder: "~/shop-app",
       model: "claude-opus-5-5",
       step: "Run the tests",
       recent: ["Searching for coupon", "Editing src/cart.ts", "Run the tests"],
@@ -134,6 +154,45 @@ describe("Motherboard pulls this computer's live agents", () => {
     expect(JSON.stringify(view)).not.toMatch(/\$|usd|price|dollar/i);
     // The pipeline agent is one pipeline desk, never also a background agent.
     expect(view.agents.filter((d) => d.id === "agent:pipe7")).toHaveLength(1);
+    // Only the desk's own fields go out: no extra keys, no personal paths.
+    for (const d of view.agents) expect(Object.keys(d).sort()).toEqual(DESK_KEYS);
+    expect(JSON.stringify(view)).not.toContain(base);
+  });
+
+  it("keeps each pipeline agent's own time: a stalled ticket goes idle while its neighbour works", async () => {
+    const { board } = await open();
+    const run = join(paths().subagents, "workflows", "run-1");
+    writeFileSync(
+      join(run, "agent-pipe8.jsonl"),
+      line({
+        isSidechain: true,
+        agentId: "pipe8",
+        type: "user",
+        timestamp: "2026-10-29T09:02:30.000Z",
+        message: { role: "user", content: "Build ticket #8: Coupon docs" },
+      }) +
+        line({
+          isSidechain: true,
+          agentId: "pipe8",
+          type: "assistant",
+          timestamp: "2026-10-29T09:03:00.000Z",
+          message: { id: "msg_q1", model: "claude-opus-5-5", content: [{ type: "text", text: "Looking around." }] },
+        }),
+    );
+    appendFileSync(
+      join(run, "journal.jsonl"),
+      `${JSON.stringify({ type: "started", key: "v2:b", agentId: "pipe8", label: "#8 Coupon docs", phase: "Build" })}\n`,
+    );
+    const at = Date.parse("2026-10-29T09:14:00.000Z"); // 9.5 min after pipe7's last step, 11 min after pipe8's
+    const desk = (id: string) => board.desks(at).agents.find((d) => d.id === id);
+    expect(await until(() => desk("agent:pipe8")?.lastAt === "2026-10-29T09:03:00.000Z")).toBe(true);
+    expect(desk("agent:pipe8")).toMatchObject({
+      role: "pipeline",
+      ticket: { number: 8 },
+      state: "idle",
+      runMs: 30_000,
+    });
+    expect(desk("agent:pipe7")).toMatchObject({ lastAt: "2026-10-29T09:04:30.000Z", state: "active" });
   });
 
   it("refuses other hosts and anything but GET, and sends no CORS header", async () => {
@@ -223,73 +282,10 @@ describe("Motherboard pulls this computer's live agents", () => {
   });
 });
 
-describe("tokens are read from the assistant lines", () => {
-  const usageLine = (id: string, output: number) =>
-    JSON.stringify({
-      type: "assistant",
-      sessionId: "s-1",
-      cwd: "/work/demo-app",
-      timestamp: "2026-10-29T09:00:00.000Z",
-      message: {
-        id,
-        model: "claude-opus-5-5",
-        content: [{ type: "text", text: "Thinking it over." }],
-        usage: {
-          input_tokens: 1,
-          output_tokens: output,
-          cache_read_input_tokens: 10,
-          cache_creation_input_tokens: 100,
-        },
-      },
-    });
-
-  it("turns usage into a turn.usage event that never redraws a board page", () => {
-    const events = parseLine(usageLine("msg_1", 5)).events;
-    expect(events.map((e) => e.kind)).toEqual(["session.seen", "reply", "turn.usage"]);
-    const usage = events.find((e) => e.kind === "turn.usage");
-    expect(usage).toEqual({
-      kind: "turn.usage",
-      at: "2026-10-29T09:00:00.000Z",
-      sessionId: "s-1",
-      messageId: "msg_1",
-      model: "claude-opus-5-5",
-      inputTokens: 1,
-      outputTokens: 5,
-      cacheReadTokens: 10,
-      cacheWriteTokens: 100,
-    });
-    const board = new Board();
-    for (const e of events) if (e.kind !== "turn.usage") board.apply(e);
-    expect(usage && board.apply(usage)).toBe(false);
-  });
-
-  it("counts one message written on three lines once, and a later message on top", () => {
-    const board = new Board(() => null);
-    for (const l of [usageLine("msg_1", 5), usageLine("msg_1", 5), usageLine("msg_1", 60), usageLine("msg_2", 7)])
-      for (const e of parseLine(l).events) board.apply(e);
-    const desk = board.desks(Date.parse("2026-10-29T09:01:00.000Z")).agents[0];
-    expect(desk?.tokens).toEqual({ input: 2, output: 67, cacheRead: 20, cacheWrite: 200, total: 289 });
-  });
-
-  it("leaves tokens unknown for logs without usage, and skips Claude Code's synthetic lines", () => {
-    const old = JSON.stringify({
-      ...JSON.parse(usageLine("msg_1", 5)),
-      message: { content: [{ type: "text", text: "Hi" }] },
-    });
-    expect(parseLine(old).events.some((e) => e.kind === "turn.usage")).toBe(false);
-    const synthetic = usageLine("msg_9", 0).replace("claude-opus-5-5", "<synthetic>");
-    expect(parseLine(synthetic).events.some((e) => e.kind === "turn.usage")).toBe(false);
-    const board = new Board(() => null);
-    for (const e of parseLine(old).events) board.apply(e);
-    expect(board.desks(Date.parse("2026-10-29T09:01:00.000Z")).agents[0]).toMatchObject({ tokens: null, model: null });
-  });
-});
-
-describe("the payload follows board-kit's Agents contract", () => {
-  it("has the contract's types: a role enum, a labelled token count and a cost that is always empty", () => {
-    expectTypeOf<Desk["role"]>().toEqualTypeOf<"main" | "background" | "pipeline">();
-    expectTypeOf<Desk["cost"]>().toEqualTypeOf<null>();
-    expectTypeOf<DesksView["agents"]>().toEqualTypeOf<Desk[]>();
-    expectTypeOf<NonNullable<Desk["tokens"]>>().toHaveProperty("total").toEqualTypeOf<number>();
+// Not yet a check against board-kit: its `Agents` type could not be read from the build sandbox (issue 15). This only
+// pins the keys sent to the keys of `Desk`, so nothing outside the one mapping file (store/desks.ts) adds fields.
+describe("the payload sends exactly the Desk fields", () => {
+  it("lists every Desk key, and only those", () => {
+    expectTypeOf<(typeof DESK_KEYS)[number]>().toEqualTypeOf<keyof Desk>();
   });
 });

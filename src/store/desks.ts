@@ -6,9 +6,10 @@ import { KEEP_MS, QUIET_MS, type Workers } from "./workers.js";
 
 /**
  * Desks: one per live agent on this computer (main sessions, background agents, pipeline agents), served read only at
- * `GET /agents` for Motherboard's Agents tab. The shape follows board-kit's `Agents` / `Agent` contract
- * (`src/contract.ts`, board-kit PR #21, merged 2026-10-27; built 2026-10-29 without access to that file, so the field
- * names here are to be checked against it: this file is the only place that knows the mapping).
+ * `GET /agents` for Motherboard's Agents tab. Meant to follow board-kit's `Agents` / `Agent` contract (`src/contract.ts`,
+ * board-kit PR #21, merged 2026-10-27). NOT YET MATCHED: board-kit was not reachable from the build sandbox (builds 1
+ * and 2, 2026-10-29), so the names below are unchecked and no board-kit commit is pinned. Match them and note the
+ * commit here before merging (issue 15); this file is the only place that knows the mapping.
  * Tokens only: `cost` is always null, there is no price table (the owner is on a flat plan; see decisions.md).
  */
 export type DeskRole = "main" | "background" | "pipeline";
@@ -54,6 +55,8 @@ type Mark = {
   steps: number;
   recent: string[];
   startedAt: string | null;
+  /** This agent's own newest event (a pipeline run's `lastAt` is the newest of all its agents). */
+  lastAt: string;
 };
 
 const SHOWN = 50;
@@ -106,9 +109,13 @@ export class DeskLog {
       steps: 0,
       recent: [],
       startedAt: null,
+      lastAt: "",
     };
     this.marks.set(key, m);
-    if (e.at) m.startedAt ??= e.at;
+    if (e.at) {
+      m.startedAt ??= e.at;
+      if (e.at > m.lastAt) m.lastAt = e.at;
+    }
     if (e.kind === "turn.usage") addUsage(m, e);
     else if (e.kind === "session.trouble") m.trouble = troubleFrom(e);
     else if (e.kind === "tool.result" && e.toolUseId === m.asking) m.asking = null;
@@ -163,7 +170,9 @@ function deskOf(p: Parts, nowMs: number): Desk | null {
   };
 }
 
-function ticketParts(run: Run, t: Ticket & { agentId: string }, home: string, log: DeskLog): Parts {
+function ticketParts(t: Ticket & { agentId: string }, home: string, log: DeskLog): Parts {
+  const mark = log.get(`agent:${t.agentId}`);
+  const own = mark?.lastAt ?? "";
   return {
     id: `agent:${t.agentId}`,
     role: "pipeline",
@@ -171,12 +180,18 @@ function ticketParts(run: Run, t: Ticket & { agentId: string }, home: string, lo
     folder: home,
     recent: t.recent,
     steps: t.steps,
-    startedAt: t.startedAt,
-    lastAt: t.finishedAt ?? run.lastAt,
+    startedAt: t.startedAt ?? mark?.startedAt ?? null,
+    // Its own newest line, never the run's: another ticket's steps must not keep a stalled agent active.
+    lastAt: t.finishedAt && t.finishedAt > own ? t.finishedAt : own,
     working: t.station === "working" || t.station === "checking",
     trouble: t.trouble,
-    mark: log.get(`agent:${t.agentId}`),
+    mark,
   };
+}
+
+/** A path as the board shows it: the home folder as `~`. */
+export function tilde(path: string, home: string): string {
+  return home && path.startsWith(home) ? `~${path.slice(home.length)}` : path;
 }
 
 type Source = {
@@ -186,6 +201,8 @@ type Source = {
   log: DeskLog;
   /** Agents a pipeline started: they are pipeline desks, never background ones. */
   isPipeline: (agentId: string) => boolean;
+  /** The home folder, shown as `~` ("" leaves paths as they are). */
+  home: string;
 };
 
 /** Every live desk: waiting for the owner first, then the active ones, then the newest; at most 50. */
@@ -226,9 +243,12 @@ export function desksOf(src: Source, nowMs: number): DesksView {
   for (const run of src.runs.values()) {
     const home = src.sessions.get(run.sessionId)?.home ?? "";
     for (const t of run.tickets.values())
-      if (t.agentId) parts.push(ticketParts(run, { ...t, agentId: t.agentId }, home, src.log));
+      if (t.agentId) parts.push(ticketParts({ ...t, agentId: t.agentId }, home, src.log));
   }
-  const desks = parts.map((p) => deskOf(p, nowMs)).filter((d) => d !== null);
+  const desks = parts
+    .map((p) => deskOf(p, nowMs))
+    .filter((d) => d !== null)
+    .map((d) => ({ ...d, folder: tilde(d.folder, src.home) }));
   desks.sort(
     (a, b) =>
       Number(b.waitsForYou) - Number(a.waitsForYou) ||
