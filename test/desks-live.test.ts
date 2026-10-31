@@ -1,17 +1,21 @@
 import { appendFileSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { deskOf, NOW, RESET, SESSION, until, useDeskLogs } from "./desks-logs.js";
+import { deskById, deskOf, NOW, RESET, SESSION, until, useDeskLogs } from "./desks-logs.js";
 
 // Motherboard's Desks (issue 15), as the logs change: tokens counted once, and who waits for the owner.
 const logs = useDeskLogs();
+const STOPPED = `usage_limit, resets ${new Date(RESET * 1000).toISOString()}`;
 
 describe("a desk's tokens stay true when logs are read again", () => {
   it("counts the same tokens after a restart (the history replays them once, not twice)", async () => {
-    const first = (await logs.open()).board.desks(NOW).agents.map((d) => [d.id, d.tokens?.total]);
+    const totals = async () => {
+      const { board } = await logs.open();
+      return (board.desks(NOW).list ?? []).map((d) => [d.id, board.deskTokens(d.id)?.total]);
+    };
+    const first = await totals();
     logs.stop();
-    const again = (await logs.open()).board.desks(NOW).agents.map((d) => [d.id, d.tokens?.total]);
-    expect(again).toEqual(first);
+    expect(await totals()).toEqual(first);
     expect(first).toContainEqual([`main:${SESSION}`, 4108]);
   });
 
@@ -30,9 +34,9 @@ describe("a desk's tokens stay true when logs are read again", () => {
       },
     });
     writeFileSync(logs.paths().session, `${shorter}\n${newest}`);
-    const main = () => deskOf(board.desks(NOW), "main");
-    expect(await until(() => main()?.lastAt === "2026-10-29T09:04:40.000Z")).toBe(true);
-    expect(main()?.tokens?.total).toBe(4108 + 3);
+    const total = () => board.deskTokens(`main:${SESSION}`)?.total;
+    expect(await until(() => total() === 4108 + 3)).toBe(true);
+    expect(total()).toBe(4108 + 3);
   });
 });
 
@@ -41,10 +45,10 @@ describe("a pipeline agent whose session is quiet or stopped", () => {
     const old = new Date(Date.now() - 3600_000);
     utimesSync(logs.paths().session, old, old);
     const { board } = logs.start();
-    const pipeline = () => deskOf(board.desks(NOW, logs.base()), "pipeline");
-    expect(await until(() => pipeline()?.steps === 3)).toBe(true);
-    expect(deskOf(board.desks(NOW, logs.base()), "main")).toBeUndefined();
-    expect(pipeline()).toMatchObject({ id: "agent:pipe7", project: "shop-app", folder: "~/shop-app", state: "active" });
+    const pipeline = () => deskOf(board.desks(NOW), "pipeline agent");
+    expect(await until(() => pipeline()?.stepCount === 3)).toBe(true);
+    expect(deskOf(board.desks(NOW), "main session")).toBeUndefined();
+    expect(pipeline()).toMatchObject({ id: "agent:pipe7", project: "shop-app", state: "working" });
   });
 
   it("files agents in a linked worktree under the repo, not the worktree's folder", async () => {
@@ -74,19 +78,19 @@ describe("a pipeline agent whose session is quiet or stopped", () => {
     const old = new Date(Date.now() - 3600_000);
     utimesSync(session, old, old);
     const { board } = logs.start();
-    const desk = (id: string) => board.desks(NOW, base).agents.find((d) => d.id === id);
-    expect(await until(() => desk("agent:pipe7")?.steps === 3 && desk("agent:bg2")?.steps === 1)).toBe(true);
-    expect(desk("agent:pipe7")).toMatchObject({ project: "shop-app", folder: "~/shop-app" });
-    expect(desk("agent:bg2")).toMatchObject({ project: "shop-app", folder: "~/shop-app" });
+    const desk = (id: string) => deskById(board.desks(NOW), id);
+    expect(await until(() => desk("agent:pipe7")?.stepCount === 3 && desk("agent:bg2")?.stepCount === 1)).toBe(true);
+    expect(desk("agent:pipe7")?.project).toBe("shop-app");
+    expect(desk("agent:bg2")?.project).toBe("shop-app");
   });
 
   it("waits for the owner when its session hits a usage limit, until the session goes on", async () => {
     const { board } = await logs.open();
-    const pipeline = () => deskOf(board.desks(NOW), "pipeline");
-    expect(pipeline()?.waitsForYou).toBe(false);
+    const pipeline = () => deskOf(board.desks(NOW), "pipeline agent");
+    expect(pipeline()?.state).toBe("working");
     appendFileSync(logs.paths().session, logs.limitLine("2026-10-29T09:04:30.000Z"));
-    expect(await until(() => pipeline()?.waitsForYou === true)).toBe(true);
-    expect(pipeline()?.wait).toEqual({ reason: "usage_limit", resetsAt: new Date(RESET * 1000).toISOString() });
+    expect(await until(() => pipeline()?.state === "waits")).toBe(true);
+    expect(pipeline()?.steps?.at(-1)).toBe(STOPPED);
     appendFileSync(
       logs.paths().session,
       logs.line({
@@ -95,7 +99,7 @@ describe("a pipeline agent whose session is quiet or stopped", () => {
         message: { id: "msg_m4", model: "claude-opus-5-5", content: [{ type: "text", text: "Going on." }] },
       }),
     );
-    expect(await until(() => pipeline()?.waitsForYou === false)).toBe(true);
+    expect(await until(() => pipeline()?.state === "working")).toBe(true);
   });
 });
 
@@ -103,10 +107,12 @@ describe("waits for you", () => {
   it("says a session waits for the owner at a usage limit, with its reset time, until its next real step", async () => {
     const { board } = await logs.open();
     appendFileSync(logs.paths().session, logs.limitLine("2026-10-29T09:04:30.000Z"));
-    const main = () => deskOf(board.desks(NOW), "main");
-    expect(await until(() => main()?.waitsForYou === true)).toBe(true);
-    expect(main()?.wait).toEqual({ reason: "usage_limit", resetsAt: new Date(RESET * 1000).toISOString() });
-    expect(board.desks(NOW).agents[0]?.waitsForYou).toBe(true); // waiting desks come first
+    const main = () => deskOf(board.desks(NOW), "main session");
+    expect(await until(() => main()?.state === "waits")).toBe(true);
+    // The reason is the desk's newest step, after the current step and the one before it.
+    expect(main()?.steps).toEqual(["Editing src/cart.ts", "Run the tests", STOPPED]);
+    expect(main()?.action).toBeUndefined(); // read only: no button
+    expect(board.desks(NOW).list?.[0]?.state).toBe("waits"); // waiting desks come first
     appendFileSync(
       logs.paths().session,
       logs.line({
@@ -121,13 +127,13 @@ describe("waits for you", () => {
         },
       }),
     );
-    expect(await until(() => main()?.waitsForYou === false)).toBe(true);
-    expect(main()?.wait).toBeNull();
+    expect(await until(() => main()?.state === "working")).toBe(true);
+    expect(main()?.steps).not.toContain(STOPPED);
   });
 
   it("stops waiting once the agent's question is answered", async () => {
     const { board } = await logs.open();
-    expect(deskOf(board.desks(NOW), "background")?.waitsForYou).toBe(true);
+    expect(deskOf(board.desks(NOW), "background agent")?.state).toBe("waits");
     appendFileSync(
       join(logs.paths().subagents, "agent-bg1.jsonl"),
       logs.line({
@@ -138,6 +144,6 @@ describe("waits for you", () => {
         message: { role: "user", content: [{ tool_use_id: "tu_b3", type: "tool_result", content: "Before" }] },
       }),
     );
-    expect(await until(() => deskOf(board.desks(NOW), "background")?.waitsForYou === false)).toBe(true);
+    expect(await until(() => deskOf(board.desks(NOW), "background agent")?.state !== "waits")).toBe(true);
   });
 });

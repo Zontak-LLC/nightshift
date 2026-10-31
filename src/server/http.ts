@@ -15,7 +15,7 @@ export type NightServer = {
 export type BoardSource = {
   view: (project: string) => unknown;
   projects: () => unknown;
-  /** Every live agent as Motherboard's desks (board-kit's `Agents` part), for `GET /agents`. */
+  /** Every live agent as board-kit's `Agents` part, for `GET /agents` (Motherboard's desks). */
   agents?: () => unknown;
   /** Where Night Watch's page is, for the "→ Night Watch" links. */
   watchUrl?: string;

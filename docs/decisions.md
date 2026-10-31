@@ -165,20 +165,31 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
 - **No CORS on purpose.** The payload lists what every agent is doing. Without CORS headers no page on another origin
   can read it, so Motherboard's server side must do the pull. That is intended.
 - **Tokens only, no dollars** (the owner, 2026-10-29). The owner is on a flat plan, so per-token prices would mislead,
-  and a price table needs upkeep. Each desk shows its tokens (total, input, output, cache read, cache write) and the
-  contract's `cost` is always null, never 0. Tokens come from `message.usage` of assistant lines (`turn.usage`); Claude
-  Code repeats one message's usage on each of its lines, so the store keeps the last line per `message.id` (a map per
-  agent, not just the last id: a log read again from the top has new history keys, so `INSERT OR IGNORE` cannot stop
-  it). History stored before this change has no `turn.usage`: those desks show tokens as unknown (null).
-- **One file knows the contract** (`store/desks.ts`), so a change in board-kit's `Agents` is one place to follow.
-  Live = as on the board: active, or seen in the last 6 hours and idle. Waiting for the owner (trouble, or an
-  `AskUserQuestion` with no answer yet) sorts first. At most 50 desks. A pipeline desk uses its own agent's newest
+  and a price table needs upkeep. The store adds up tokens per agent (total, input, output, cache read, cache write)
+  and the contract's `costUsd` is always null, never 0. Tokens come from `message.usage` of assistant lines
+  (`turn.usage`); Claude Code repeats one message's usage on each of its lines, so the store keeps the last line per
+  `message.id` (a map per agent, not just the last id: a log read again from the top has new history keys, so
+  `INSERT OR IGNORE` cannot stop it). History stored before this change has no `turn.usage`: its tokens are unknown.
+- **Follow-up for board-kit: a token field.** The contract (commit 0c60024) has no field for tokens, so `GET /agents`
+  does not send them yet and the desks show no token count. The totals wait in `Board.deskTokens`; when `Agent` gets a
+  field, add it to `Desk` and `deskOf`. Not squeezed into `model` or `steps`: those keep their own meaning.
+- **One file knows the contract** (`store/desks.ts`, matched to board-kit commit 0c60024), so a change in board-kit's
+  `Agents` is one place to follow. Only the contract's keys go out; the copies in `test/fixtures/` (`board-kit-contract.txt`,
+  `board-kit-view-agents.txt`, the typed `board-kit-agents.ts`) are what the tests hold the payload against. Mapping:
+  `title` is the ticket's, session's or agent's title, `ticket` a pipeline's `#7`, `role` the words main session /
+  background agent / pipeline agent, `minutes` the run time in whole minutes, `idleMinutes` set when idle. Left out:
+  `action` (read only, no buttons), `stage` and `finishedAt` (the spec asks for neither), and `done`, because a
+  finished agent shows as idle, as the spec says, so DONE TODAY stays empty for now.
+- **Why it waits goes in `steps`.** `state: "waits"` says that it waits; the contract has no reason field, so a stopped
+  agent's newest step is the board's word plus the reset time (`usage_limit, resets <time>`). A question needs none:
+  its newest step is already `AskUserQuestion`.
+- **The Agents tab is checked by hand after merge.** board-kit is not a package here and `view-agents.ts` needs its
+  `agents.ts` and `view-html.ts`, which were not copied, so no test renders the desks. After merge, point Motherboard
+  at `/agents` and look once at the tab.
+- **What counts as live.** As on the board: active, or seen in the last 6 hours and idle. Waiting for the owner (trouble,
+  or an `AskUserQuestion` with no answer yet) sorts first. At most 50 desks. A pipeline desk uses its own agent's newest
   line, never the run's (another ticket's steps must not keep a stalled agent active), the repository of its own `cwd`
   when its session's log was not read (a worktree shows as its repo, through the cached `rootOf`), and its session's
   trouble while the ticket is in progress. A background desk's title is the agent's description or its id, never its
-  task: the task is the start of its prompt, and prompts stay off this endpoint. The store shows the home folder as
-  `~`, so the CLI sends `board.desks()` as it is, with no extra fields.
-- **Open (issue 15), blocks merging:** the field names are not yet matched to board-kit's `src/contract.ts`; no build
-  or review sandbox could read it (2026-10-31: it is not in this repo or in `node_modules`). Put a copy of `contract.ts`
-  and `view-agents.ts` in reach of the build, then match the names, pin the board-kit commit in `store/desks.ts`, test
-  against a copied fixture, and check the Agents tab once by hand.
+  task: the task is the start of its prompt, and prompts stay off this endpoint. No paths go out (`project` is the
+  folder's name), and the CLI sends `board.desks()` as it is, with no extra fields.

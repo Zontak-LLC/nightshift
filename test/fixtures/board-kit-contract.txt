@@ -1,0 +1,299 @@
+// Copied from board-kit commit 0c60024, src/contract.ts. Reference only; the contract wins.
+/**
+ * Motherboard's contract: what any pipeline hands the board, on top of the board kit's Board/Request shape
+ * (Forge docs/board-kit/SPEC.md §5). Every field here is optional, so a pipeline that sends none still draws.
+ * Pure: no I/O. A pipeline names its own things through `words`; this package never spells them.
+ */
+import type { Action, CardAction } from "./actions.js";
+import type { NeedItem } from "./needs-you.js";
+
+export {
+  ACTION_LABEL,
+  ACTIONS,
+  type Action,
+  type ActionPost,
+  actionHeaders,
+  barLabel,
+  CARD_ACTIONS,
+  type CardAction,
+  CONFIRM,
+  MAIN_ACTIONS,
+  NOTE_MAX,
+  NOTES,
+  ticketActions,
+} from "./actions.js";
+
+import type { Priority } from "./priority.js";
+
+/** The five stacks, left to right. */
+export type Stack = "wait" | "work" | "you" | "shelf" | "out";
+
+/** How a stack looks: the colour token carries its one meaning (grey queued, blue working, amber you, green done). */
+export type Tone = "grey" | "blue" | "amber" | "soft" | "green";
+
+export const STACKS: readonly { id: Stack; label: string; tone: Tone }[] = [
+  { id: "wait", label: "Waiting", tone: "grey" },
+  { id: "work", label: "Working", tone: "blue" },
+  { id: "you", label: "Needs you", tone: "amber" },
+  { id: "shelf", label: "On the shelf", tone: "soft" },
+  { id: "out", label: "Released", tone: "green" },
+];
+
+const LABEL = Object.fromEntries(STACKS.map((s) => [s.id, s.label])) as Record<Stack, string>;
+
+/** A pipeline's own labels, e.g. { shelf: "Merged to next" }. Unknown keys are ignored. */
+export type Words = Partial<Record<Stack, string>>;
+
+/** The label a stack shows: the pipeline's word when it gave one, else the default. */
+export function stackLabel(stack: Stack, words: Words = {}): string {
+  return words[stack]?.trim() || LABEL[stack];
+}
+
+/** What a card adds to a request. `stage` is how many of the six progress segments are done (0 to 6). */
+export type CardExtras = { stack?: Stack; stage?: number; canMove?: Stack[]; priority?: Priority };
+
+/** The progress segments of a card (six) or a desk (five): done, the current one (its tone), the rest. */
+export type Segment = "done" | "now-blue" | "now-amber" | "todo";
+
+export function segments(stage: number, waitsForYou: boolean, count = 6): Segment[] {
+  const done = Math.max(0, Math.min(count, Math.floor(stage)));
+  return Array.from({ length: count }, (_, i) => {
+    if (i < done) return "done";
+    if (i === done) return waitsForYou ? "now-amber" : "now-blue";
+    return "todo";
+  });
+}
+
+/** The top bar's stat row. Missing numbers show as a dash. */
+export type Shift = {
+  done?: number;
+  merged?: number;
+  stopped?: number;
+  avgMinutes?: number;
+  finishAt?: string;
+  onShiftMinutes?: number;
+  /** What the night cost, in US dollars. Home's night chips show it; the stat row does not. */
+  costUsd?: number;
+};
+
+/** A stat's number as text; a missing one is a dash. */
+export const count = (v: number | undefined): string => (v === undefined ? "—" : String(v));
+
+/** Minutes as the board writes them: 12m, 1h, 1h 35m; a missing one is a dash. */
+export function minutesText(v: number | undefined): string {
+  if (v === undefined) return "—";
+  return v < 60 ? `${Math.round(v)}m` : `${Math.floor(v / 60)}h${v % 60 ? ` ${Math.round(v % 60)}m` : ""}`;
+}
+
+/** The NOW strip's line: what waits for you, else what runs, else all quiet. Its tone colours label and edge. */
+export type NowLine = { tone: "amber" | "blue" | "grey"; text: string };
+
+export function nowFrom(waiting: readonly string[], running: readonly string[]): NowLine {
+  if (waiting.length)
+    return {
+      tone: "amber",
+      text: `${waiting.length} ${waiting.length === 1 ? "waits" : "wait"} for you: ${firstThree(waiting)}`,
+    };
+  if (running.length) return { tone: "blue", text: `${running.length} running: ${firstThree(running)}` };
+  return { tone: "grey", text: "All quiet" };
+}
+
+/** The first three names, then how many more. */
+function firstThree(names: readonly string[]): string {
+  const shown = names.slice(0, 3).join(", ");
+  return names.length > 3 ? `${shown} +${names.length - 3} more` : shown;
+}
+
+export function shiftRow(s: Shift): { key: string; value: string }[] {
+  return [
+    { key: "DONE", value: count(s.done) },
+    { key: "MERGED", value: count(s.merged) },
+    { key: "STOPPED", value: count(s.stopped) },
+    { key: "AVG", value: minutesText(s.avgMinutes) },
+    { key: "EST. FINISH", value: s.finishAt ?? "—" },
+    { key: "ON SHIFT", value: minutesText(s.onShiftMinutes) },
+  ];
+}
+
+/** One point of what a ticket asks (R1, R2…), ticked once a review found it met. */
+export type Ask = { id: string; text: string; ok?: boolean };
+
+/** What the ticket panel adds to a request: the agents' own text for each tab, the result's screenshot, actions. */
+export type TicketExtras = {
+  summary?: string;
+  screenshot?: string;
+  asks?: Ask[];
+  original?: string;
+  fix?: string;
+  proof?: string;
+  log?: string;
+  actions?: Action[];
+};
+
+/**
+ * One request as the board reads it. A minimal stand-in for the board kit's Request shape. `id` is the pipeline's
+ * own short id and `status` its one plain status line, both shown as given; `held` folds the card away.
+ */
+export type BoardRequest = CardExtras &
+  TicketExtras &
+  Pick<NeedItem, "changes" | "affects" | "undo"> & {
+    title: string;
+    project?: string;
+    id?: string;
+    status?: string;
+    held?: boolean;
+    action?: CardAction;
+    /** What the page saw (e.g. a version), posted back with each action so the pipeline can refuse a stale one. */
+    seen?: string;
+    /** One plain line above the action bar: what the owner decides (e.g. the question and its recommended answer). */
+    prompt?: string;
+  };
+
+/** The usage meters. Forge's adapter maps its `flow.credit` onto this. Null percent = unknown. */
+export type Usage = {
+  fiveHour?: { percent: number | null; resetsAt?: string };
+  week?: { percent: number | null };
+};
+
+/** One alert or message from the pipeline, shown on Home. `at` is an ISO time, shown as HH:MM. */
+export type Alert = { id: string; at: string; text: string; tone?: "info" | "warn" | "stop" };
+
+/**
+ * What the page reads from a board: a minimal, all-optional stand-in for the board kit's Board shape.
+ * `actionUrl` is where every action posts (default `/action`), with `actionHeaders`.
+ */
+export type Board = {
+  /** The top bar's chips. A project may bring its own colour (`#rgb` or `#rrggbb`); see `src/project-color.ts`. */
+  projects?: Project[];
+  shift?: Shift;
+  usage?: Usage;
+  requests?: BoardRequest[];
+  words?: Words;
+  actionUrl?: string;
+  /** Headers every action post carries (`actionHeaders` in `src/actions.ts` keeps only safe ones). */
+  actionHeaders?: Record<string, string>;
+  /** A Server-Sent Events address with newer pages (`src/live.ts`); the page follows it and redraws in place. */
+  liveUrl?: string;
+  /** The pipeline's alerts and messages for Home, in any order. */
+  alerts?: Alert[];
+  /** What else waits for the owner on Home, besides Needs you tickets (`src/needs-you.ts`). */
+  needs?: NeedItem[];
+  /** The Agents view: one desk per working agent. */
+  agents?: Agents;
+  /** The Sites view: one health row per site, in the pipeline's order (down ones show first). */
+  sites?: Site[];
+  /** A plain line the Sites view shows instead of rows (e.g. "Sentinel is not answering"); checked first. */
+  sitesNote?: string;
+  /** The pipeline takes new requests: Work shows New request for its `projects` (`src/new-request.ts`). */
+  newRequest?: boolean;
+};
+
+/**
+ * One site as the Sites view reads it. `where` is its address line and `reason` why it is down, both the pipeline's
+ * words. `uptime24h` is a percent (0-100) over the last 24 hours. `missedHours` lists the hours with missed checks,
+ * counted back from now (0 = this hour, 23 = 23 hours ago). `errors` come most important first (the first 2 show);
+ * noise is only ever a count. `frozen` tags a site nobody changes now.
+ */
+export type Site = {
+  name: string;
+  state: "up" | "down";
+  where?: string;
+  reason?: string;
+  uptime24h?: number;
+  missedHours?: number[];
+  errors?: SiteError[];
+  noise?: number;
+  frozen?: boolean;
+};
+
+/**
+ * An error worth a look. `lastSeen` is the pipeline's own short time (e.g. "09:12"); `ticket` its words for the
+ * ticket that covers it (e.g. "R-92 fix the database read"), shown as plain text.
+ */
+export type SiteError = { title: string; count?: number; lastSeen?: string; ticket?: string };
+
+/** A project as a pipeline may send it: a name, or a name with its own colour. */
+export type Project = string | { name: string; color?: string };
+
+/** What an agent is doing. No state counts as working. */
+export type AgentState = "working" | "waits" | "done" | "idle";
+
+/**
+ * One agent as the Agents view reads it. `role`, `model` and `steps` are the pipeline's own words. `stage` is how
+ * many of the five dashes are done; `steps` run oldest first (the last three show); `action` only shows while it
+ * waits; `finishedAt` (e.g. "10:49") and `idleMinutes` fill the Quiet chips.
+ */
+export type Agent = {
+  id: string;
+  title: string;
+  role?: string;
+  ticket?: string;
+  project?: string;
+  model?: string;
+  state?: AgentState;
+  stage?: number;
+  steps?: string[];
+  stepCount?: number;
+  costUsd?: number | null;
+  minutes?: number;
+  action?: "answer" | "approve";
+  finishedAt?: string;
+  idleMinutes?: number;
+};
+
+/** The Agents part of a board. DONE TODAY counts the done agents in `list` when `doneToday` is not sent. */
+export type Agents = { list?: Agent[]; doneToday?: number; stepsPerHour?: number };
+
+/**
+ * A usage meter (5 H, WEEK) as ten blocks; amber from 80%, the board's one warning. Null percent = unknown.
+ * `percent` is the whole number to show (rounded, then held to 0-100); the blocks and the tone follow it.
+ */
+export function meterBlocks(
+  percent: number | null,
+  blocks = 10,
+): { on: number; tone: "blue" | "amber" | "grey"; percent: number | null } {
+  if (percent === null || !Number.isFinite(percent)) return { on: 0, tone: "grey", percent: null };
+  const p = Math.max(0, Math.min(100, Math.round(percent)));
+  return { on: Math.round((p / 100) * blocks), tone: p >= 80 ? "amber" : "blue", percent: p };
+}
+
+/** The ticket panel's tabs, left to right; keys 1 to 5 pick them. */
+export const TICKET_TABS = ["summary", "original", "fix", "proof", "log"] as const;
+export type TicketTab = (typeof TICKET_TABS)[number];
+
+/**
+ * The address of an open ticket: `#R-66` on Summary, `#R-66/proof` on another tab.
+ * Self-contained, like `parseAddress`: the page script carries its source.
+ */
+export function addressFor(id: string, tab: string): string {
+  return `#${encodeURIComponent(id)}${tab === "summary" ? "" : `/${tab}`}`;
+}
+
+/**
+ * Reads an address back: the ticket id and its tab (an unknown or missing tab is Summary), or null with no id.
+ * Self-contained, because the page script carries its source; there `tabs` is passed in.
+ */
+export function parseAddress(hash: string, tabs: readonly string[] = TICKET_TABS): { id: string; tab: string } | null {
+  const raw = hash.replace(/^#/, "");
+  const cut = raw.indexOf("/");
+  const tab = cut < 0 ? "summary" : raw.slice(cut + 1);
+  let id = "";
+  try {
+    id = decodeURIComponent(cut < 0 ? raw : raw.slice(0, cut));
+  } catch {
+    return null;
+  }
+  if (!id) return null;
+  return { id, tab: tabs.includes(tab) ? tab : "summary" };
+}
+
+/** What it asks, as drawn: R1, R2… (the given id, else its place), ticked only when a review said ok. */
+export function asksTicked(asks: readonly Ask[] = []): { id: string; text: string; ticked: boolean }[] {
+  return asks.map((a, i) => ({ id: a.id?.trim() || `R${i + 1}`, text: a.text, ticked: a.ok === true }));
+}
+
+/** A screenshot the panel may draw: https, this machine, or an inline image. Anything else is dropped. */
+export function safeImage(url: string | undefined): string | undefined {
+  const u = url?.trim() ?? "";
+  return /^(https:|http:\/\/127\.0\.0\.1(?=[:/]|$)|data:image\/)/i.test(u) ? u : undefined;
+}

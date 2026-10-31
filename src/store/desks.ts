@@ -7,39 +7,32 @@ import { KEEP_MS, QUIET_MS, type Workers } from "./workers.js";
 
 /**
  * Desks: one per live agent on this computer (main sessions, background agents, pipeline agents), served read only at
- * `GET /agents` for Motherboard's Agents tab. Meant to follow board-kit's `Agents` / `Agent` contract (`src/contract.ts`,
- * board-kit PR #21, merged 2026-10-27). NOT YET MATCHED: board-kit is not in this repo and no build sandbox could read
- * it (2026-10-29 to 2026-10-31), so the names below are unchecked and no board-kit commit is pinned. Match them and note
- * the commit here before merging (issue 15); this file is the only place that knows the mapping.
- * Tokens only: `cost` is always null, there is no price table (the owner is on a flat plan; see decisions.md).
+ * `GET /agents` for Motherboard's Agents tab. `Desk` and `DesksView` are board-kit's `Agent` and `Agents` at commit
+ * 0c60024 (`src/contract.ts`, copied to test/fixtures/); this file is the only place that knows the mapping.
+ * The contract has no field for tokens or for why an agent waits. Tokens stay in the store (`DeskTokens`) until board-kit
+ * adds one (see decisions.md); the reason goes out as the desk's newest step. `costUsd` is always null: no price table,
+ * the owner is on a flat plan. `action` stays unset: desks are read only here.
  */
-export type DeskRole = "main" | "background" | "pipeline";
-export type DeskTokens = { total: number; input: number; output: number; cacheRead: number; cacheWrite: number };
-export type DeskWait = { reason: Trouble["reason"] | "question"; resetsAt: string | null };
+export type DeskState = "working" | "waits" | "done" | "idle";
 export type Desk = {
   id: string;
-  role: DeskRole;
-  /** A pipeline's ticket number and title; otherwise the session's or the agent's title (number null). */
-  ticket: { number: number | null; title: string };
-  /** The repository's folder name. */
-  project: string;
-  folder: string;
-  model: string | null;
-  step: string | null;
-  /** The current step and the two before it, oldest first. */
-  recent: string[];
-  steps: number;
-  /** Null when unknown (steps stored before tokens were read). */
-  tokens: DeskTokens | null;
-  cost: null;
-  startedAt: string | null;
-  lastAt: string;
-  runMs: number;
-  state: "active" | "idle";
-  waitsForYou: boolean;
-  wait: DeskWait | null;
+  title: string;
+  role?: string;
+  ticket?: string;
+  project?: string;
+  model?: string;
+  state?: DeskState;
+  stage?: number;
+  steps?: string[];
+  stepCount?: number;
+  costUsd?: number | null;
+  minutes?: number;
+  action?: "answer" | "approve";
+  finishedAt?: string;
+  idleMinutes?: number;
 };
-export type DesksView = { generatedAt: string; agents: Desk[] };
+export type DesksView = { list?: Desk[]; doneToday?: number; stepsPerHour?: number };
+export type DeskTokens = { total: number; input: number; output: number; cacheRead: number; cacheWrite: number };
 
 type UsageEvent = Extract<NightEvent, { kind: "turn.usage" }>;
 /** What the board keeps nowhere else, per main session (`main:<id>`) and per agent (`agent:<id>`). */
@@ -134,45 +127,49 @@ export class DeskLog {
   }
 }
 
-type Parts = Pick<Desk, "id" | "role" | "ticket" | "folder" | "steps" | "startedAt" | "lastAt"> & {
+type Parts = {
+  id: string;
+  role: string;
+  title: string;
+  /** A pipeline's ticket number. */
+  ticket: string | null;
+  folder: string;
+  steps: number;
   recent: string[];
+  startedAt: string | null;
+  lastAt: string;
   /** Not finished (a session has no end marker; an agent's turn ended; a ticket got its result). */
   working: boolean;
   trouble: Trouble | null;
   mark: Mark | undefined;
 };
+type Seated = { desk: Desk; lastAt: string };
+
+/** The board's words for why it stopped; the steps are the one place the contract has for them. */
+const stopLine = (t: Trouble) => (t.resetsAt ? `${t.reason}, resets ${t.resetsAt}` : t.reason);
 
 /** One desk, or null when it was quiet too long to count as live. */
-function deskOf(p: Parts, nowMs: number): Desk | null {
+function deskOf(p: Parts, nowMs: number): Seated | null {
   const at = Date.parse(p.lastAt);
   if (!p.folder || Number.isNaN(at) || nowMs - at > KEEP_MS) return null;
   const active = p.working && nowMs - at <= QUIET_MS;
-  const wait: DeskWait | null = p.trouble
-    ? { reason: p.trouble.reason, resetsAt: p.trouble.resetsAt }
-    : p.mark?.asking
-      ? { reason: "question", resetsAt: null }
-      : null;
+  const state: DeskState = p.trouble || p.mark?.asking ? "waits" : active ? "working" : "idle";
   const start = p.startedAt ? Date.parse(p.startedAt) : Number.NaN;
-  const recent = p.recent.slice(-RECENT);
-  return {
+  const desk: Desk = {
     id: p.id,
+    title: p.title,
     role: p.role,
-    ticket: p.ticket,
+    ...(p.ticket && { ticket: p.ticket }),
     project: basename(p.folder) || p.folder,
-    folder: p.folder,
-    model: p.mark?.model ?? null,
-    step: recent.at(-1) ?? null,
-    recent,
-    steps: p.steps,
-    tokens: p.mark?.tokens ?? null,
-    cost: null,
-    startedAt: p.startedAt,
-    lastAt: p.lastAt,
-    runMs: Number.isNaN(start) ? 0 : Math.max(0, (active ? nowMs : at) - start),
-    state: active ? "active" : "idle",
-    waitsForYou: wait !== null,
-    wait,
+    ...(p.mark?.model && { model: p.mark.model }),
+    state,
+    steps: (p.trouble ? [...p.recent, stopLine(p.trouble)] : p.recent).slice(-RECENT),
+    stepCount: p.steps,
+    costUsd: null,
+    ...(!Number.isNaN(start) && { minutes: Math.round(Math.max(0, (active ? nowMs : at) - start) / 60_000) }),
+    ...(state === "idle" && { idleMinutes: Math.floor((nowMs - at) / 60_000) }),
   };
+  return { desk, lastAt: p.lastAt };
 }
 
 function ticketParts(t: Ticket & { agentId: string }, session: Session | undefined, src: Source): Parts {
@@ -182,8 +179,9 @@ function ticketParts(t: Ticket & { agentId: string }, session: Session | undefin
   const working = t.station === "working" || t.station === "checking";
   return {
     id: `agent:${t.agentId}`,
-    role: "pipeline",
-    ticket: { number: t.number, title: t.title },
+    role: "pipeline agent",
+    title: t.title,
+    ticket: `#${t.number}`,
     // A quiet session log is followed from its end, so a run's session can be unknown while its agents work.
     folder: session?.home ?? src.rootOf(cwd)?.root ?? cwd,
     recent: t.recent,
@@ -197,11 +195,6 @@ function ticketParts(t: Ticket & { agentId: string }, session: Session | undefin
   };
 }
 
-/** A path as the board shows it: the home folder as `~`. */
-export function tilde(path: string, home: string): string {
-  return home && path.startsWith(home) ? `~${path.slice(home.length)}` : path;
-}
-
 type Source = {
   sessions: Map<string, Session>;
   runs: Map<string, Run>;
@@ -211,8 +204,6 @@ type Source = {
   rootOf: RootOf;
   /** Agents a pipeline started: they are pipeline desks, never background ones. */
   isPipeline: (agentId: string) => boolean;
-  /** The home folder, shown as `~` ("" leaves paths as they are). */
-  home: string;
 };
 
 /** Every live desk: waiting for the owner first, then the active ones, then the newest; at most 50. */
@@ -222,8 +213,9 @@ export function desksOf(src: Source, nowMs: number): DesksView {
     const mark = src.log.get(`main:${id}`);
     parts.push({
       id: `main:${id}`,
-      role: "main",
-      ticket: { number: null, title: s.title ?? "Session" },
+      role: "main session",
+      title: s.title ?? "Session",
+      ticket: null,
       folder: s.home,
       recent: mark?.recent ?? [],
       steps: mark?.steps ?? 0,
@@ -238,9 +230,10 @@ export function desksOf(src: Source, nowMs: number): DesksView {
     const mark = src.log.get(`agent:${w.agentId}`);
     parts.push({
       id: `agent:${w.agentId}`,
-      role: "background",
+      role: "background agent",
       // Never `w.task`: that is the start of the agent's prompt, and prompts stay off this endpoint.
-      ticket: { number: null, title: w.title ?? `agent ${w.agentId.slice(0, 6)}` },
+      title: w.title ?? `agent ${w.agentId.slice(0, 6)}`,
+      ticket: null,
       folder: src.rootOf(place.folder)?.root ?? place.folder,
       recent: w.recent,
       steps: w.steps,
@@ -256,15 +249,12 @@ export function desksOf(src: Source, nowMs: number): DesksView {
     for (const t of run.tickets.values())
       if (t.agentId) parts.push(ticketParts({ ...t, agentId: t.agentId }, session, src));
   }
-  const desks = parts
-    .map((p) => deskOf(p, nowMs))
-    .filter((d) => d !== null)
-    .map((d) => ({ ...d, folder: tilde(d.folder, src.home) }));
-  desks.sort(
+  const seated = parts.map((p) => deskOf(p, nowMs)).filter((s) => s !== null);
+  seated.sort(
     (a, b) =>
-      Number(b.waitsForYou) - Number(a.waitsForYou) ||
-      Number(b.state === "active") - Number(a.state === "active") ||
+      Number(b.desk.state === "waits") - Number(a.desk.state === "waits") ||
+      Number(b.desk.state === "working") - Number(a.desk.state === "working") ||
       b.lastAt.localeCompare(a.lastAt),
   );
-  return { generatedAt: new Date(nowMs).toISOString(), agents: desks.slice(0, SHOWN) };
+  return { list: seated.slice(0, SHOWN).map((s) => s.desk) };
 }

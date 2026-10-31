@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import { type NightEvent, type RunEvent, titleInLabel } from "../parser/index.js";
 import { columnsOf, newRun, newTicket, widenTimes } from "./columns.js";
-import { DeskLog, type DesksView, desksOf } from "./desks.js";
+import { DeskLog, type DesksView, type DeskTokens, desksOf } from "./desks.js";
 import { type NowRow, nowRows, placeStep, type Spot } from "./places.js";
 import { type RootOf, repoRootOf } from "./root.js";
 import { type Alert, alertsOf, pauseTicket, type Trouble, troubleFrom } from "./trouble.js";
@@ -253,9 +253,14 @@ export class Board {
   }
 
   /** One desk per live agent on this computer, for Motherboard's Agents tab (`GET /agents`, see desks.ts). */
-  desks(nowMs = Date.now(), home = ""): DesksView {
+  desks(nowMs = Date.now()): DesksView {
     const { sessions, runs, workers, log, rootOf } = this;
-    return desksOf({ sessions, runs, workers, log, rootOf, home, isPipeline: (id) => this.agents.has(id) }, nowMs);
+    return desksOf({ sessions, runs, workers, log, rootOf, isPipeline: (id) => this.agents.has(id) }, nowMs);
+  }
+
+  /** A desk's tokens, null when unknown: kept here until board-kit's `Agent` has a field for them. */
+  deskTokens(deskId: string): DeskTokens | null {
+    return this.log.get(deskId)?.tokens ?? null;
   }
 
   /** One project's board: its newest session's place, what is happening now, and its newest pipeline run. */

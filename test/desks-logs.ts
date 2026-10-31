@@ -18,7 +18,9 @@ export const until = async (check: () => boolean, ms = 3000) => {
   while (!check() && Date.now() < end) await new Promise((r) => setTimeout(r, 25));
   return check();
 };
-export const deskOf = (view: DesksView, role: Desk["role"]) => view.agents.find((d) => d.role === role);
+export const deskOf = (view: DesksView, role: "main session" | "background agent" | "pipeline agent") =>
+  view.list?.find((d) => d.role === role);
+export const deskById = (view: DesksView, id: string): Desk | undefined => view.list?.find((d) => d.id === id);
 
 /** A fresh folder of logs per test, and an engine that follows them. */
 export function useDeskLogs() {
@@ -70,11 +72,11 @@ export function useDeskLogs() {
   async function open(): Promise<Engine> {
     const started = start();
     await until(() => {
-      const d = started.board.desks(NOW).agents;
+      const d = started.board.desks(NOW).list ?? [];
       return (
         d.length === 3 &&
-        d.some((x) => x.ticket.title === "Docs: coupon field") &&
-        d.every((x) => x.steps === 3 || x.steps === 4)
+        d.some((x) => x.title === "Docs: coupon field") &&
+        d.every((x) => x.stepCount === 3 || x.stepCount === 4)
       );
     });
     return started;

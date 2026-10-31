@@ -7,7 +7,7 @@ import { startEngine } from "./engine.js";
 import { startMeter } from "./meter.js";
 import type { NightEvent, RunEvent } from "./parser/index.js";
 import { startServer } from "./server/index.js";
-import { DEFAULT_KEEP_DAYS, expand, loadPinned, projectTiles, repoOf, tilde, watchSiteOf } from "./store/index.js";
+import { DEFAULT_KEEP_DAYS, expand, loadPinned, projectTiles, repoOf, watchSiteOf } from "./store/index.js";
 import { terminalPrinter } from "./terminal.js";
 import { parseArgs, usage } from "./usage.js";
 import { localWatchUrl, startWatchClient, watchOnBoard, watchOnTile } from "./watch/index.js";
@@ -58,7 +58,7 @@ async function start(): Promise<void> {
     view: (project) => {
       const view = board.view(project);
       const home = homedir();
-      const folder = view.folder && tilde(view.folder, home);
+      const folder = view.folder?.startsWith(home) ? `~${view.folder.slice(home.length)}` : view.folder;
       const pinned = loadPinned(pinnedFile, warn);
       const name = pinned.find((p) => basename(expand(p.path, home)) === project)?.name ?? project;
       const site = watchSiteOf(pinned, project, home);
@@ -72,7 +72,7 @@ async function start(): Promise<void> {
       };
     },
     projects: tiles,
-    agents: () => board.desks(Date.now(), homedir()),
+    agents: () => board.desks(Date.now()),
   });
   publish = server.publish;
   refresh = server.refresh;

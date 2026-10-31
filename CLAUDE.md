@@ -47,7 +47,9 @@ before changing anything; update both in the same commit when a choice changes.
   board-kit's `Agents` part, for Motherboard to pull (read only, same Host check, no CORS). `parser/usage.ts` reads
   `message.model` and `message.usage` into `turn.usage` (the store keeps the last line per `message.id`, so a message
   split over lines counts once); `store/desks.ts` (`DeskLog`, `desksOf`, the only file that knows the contract) adds
-  tokens per agent, open `AskUserQuestion` calls and trouble. Tokens only: `cost` is always null. See decisions.md.
+  tokens per agent, open `AskUserQuestion` calls and trouble. `Desk`/`DesksView` are board-kit's `Agent`/`Agents` at
+  commit 0c60024 (copies in `test/fixtures/`), so only its keys go out: `costUsd` is always null, and tokens stay in the
+  store (`Board.deskTokens`) until the contract has a field for them. See decisions.md.
 - `src/cli.ts` wires them together (`src/terminal.ts` is the terminal view: one line per step, titles and pull
   requests printed once per session, local time); `test/` holds the scenario tests and `test/fixtures/` real-shaped sample logs.
 

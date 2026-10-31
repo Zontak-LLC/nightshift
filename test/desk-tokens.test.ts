@@ -47,8 +47,9 @@ describe("tokens are read from the assistant lines", () => {
     const board = new Board(() => null);
     for (const l of [usageLine("msg_1", 5), usageLine("msg_1", 5), usageLine("msg_1", 60), usageLine("msg_2", 7)])
       for (const e of parseLine(l).events) board.apply(e);
-    const desk = board.desks(Date.parse("2026-10-29T09:01:00.000Z")).agents[0];
-    expect(desk?.tokens).toEqual({ input: 2, output: 67, cacheRead: 20, cacheWrite: 200, total: 289 });
+    const desk = board.desks(Date.parse("2026-10-29T09:01:00.000Z")).list?.[0];
+    expect(desk?.id).toBe("main:s-1");
+    expect(board.deskTokens("main:s-1")).toEqual({ input: 2, output: 67, cacheRead: 20, cacheWrite: 200, total: 289 });
   });
 
   it("leaves tokens unknown for logs without usage, and skips Claude Code's synthetic lines", () => {
@@ -61,6 +62,7 @@ describe("tokens are read from the assistant lines", () => {
     expect(parseLine(synthetic).events.some((e) => e.kind === "turn.usage")).toBe(false);
     const board = new Board(() => null);
     for (const e of parseLine(old).events) board.apply(e);
-    expect(board.desks(Date.parse("2026-10-29T09:01:00.000Z")).agents[0]).toMatchObject({ tokens: null, model: null });
+    expect(board.deskTokens("main:s-1")).toBeNull();
+    expect(board.desks(Date.parse("2026-10-29T09:01:00.000Z")).list?.[0]).not.toHaveProperty("model");
   });
 });
