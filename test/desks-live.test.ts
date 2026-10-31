@@ -196,4 +196,66 @@ describe("waits for you", () => {
     expect(await until(() => background()?.state === "waits")).toBe(true);
     expect(background()?.steps?.at(-1)).toBe(STOPPED);
   });
+
+  it("stops waiting on a ticket's open question once the journal says the agent finished", async () => {
+    const { board } = await logs.open();
+    const { run } = logs.paths();
+    const pipeline = () => deskById(board.desks(NOW), "agent:pipe7");
+    appendFileSync(
+      join(run, "agent-pipe7.jsonl"),
+      logs.line({
+        isSidechain: true,
+        agentId: "pipe7",
+        type: "assistant",
+        timestamp: "2026-10-29T09:04:40.000Z",
+        message: {
+          id: "msg_p4",
+          model: "claude-opus-5-5",
+          content: [{ type: "tool_use", id: "tu_p4", name: "AskUserQuestion", input: { question: "Which coupon?" } }],
+        },
+      }),
+    );
+    expect(await until(() => pipeline()?.state === "waits")).toBe(true);
+    appendFileSync(
+      join(run, "journal.jsonl"),
+      `${JSON.stringify({ type: "result", key: "v2:a", agentId: "pipe7", result: { status: "done" } })}\n`,
+    );
+    expect(await until(() => pipeline()?.state === "idle")).toBe(true);
+  });
+
+  it("stops waiting on a helper's own usage limit once the journal says it finished", async () => {
+    const { board } = await logs.open();
+    const { run } = logs.paths();
+    const log = join(run, "agent-help1.jsonl");
+    writeFileSync(
+      log,
+      logs.line({
+        isSidechain: true,
+        agentId: "help1",
+        type: "assistant",
+        timestamp: "2026-10-29T09:04:10.000Z",
+        message: {
+          id: "msg_h1",
+          model: "claude-sonnet-5-5",
+          content: [{ type: "tool_use", id: "tu_h1", name: "Bash", input: { command: "ls" } }],
+        },
+      }),
+    );
+    const journal = join(run, "journal.jsonl");
+    appendFileSync(
+      journal,
+      `${JSON.stringify({ type: "started", key: "v2:h", agentId: "help1", label: "rank open tickets", phase: "Plan" })}\n`,
+    );
+    const helper = () => deskById(board.desks(NOW), "agent:help1");
+    expect(await until(() => helper()?.state === "working")).toBe(true);
+    appendFileSync(log, logs.limitLine("2026-10-29T09:04:30.000Z", { isSidechain: true, agentId: "help1" }));
+    expect(await until(() => helper()?.state === "waits")).toBe(true);
+    expect(helper()?.steps?.at(-1)).toBe(STOPPED);
+    appendFileSync(
+      journal,
+      `${JSON.stringify({ type: "result", key: "v2:h", agentId: "help1", result: { status: "done" } })}\n`,
+    );
+    expect(await until(() => helper()?.state === "idle")).toBe(true);
+    expect(helper()?.steps).not.toContain(STOPPED);
+  });
 });

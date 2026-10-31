@@ -163,7 +163,7 @@ function deskOf(p: Parts, nowMs: number, hideHome: (text: string) => string): Se
   const at = Date.parse(p.lastAt);
   if (!p.folder || Number.isNaN(at) || nowMs - at > KEEP_MS) return null;
   const active = p.working && nowMs - at <= QUIET_MS;
-  const state: DeskState = p.trouble || p.mark?.asking ? "waits" : active ? "working" : "idle";
+  const state: DeskState = p.trouble || (p.working && p.mark?.asking) ? "waits" : active ? "working" : "idle";
   const start = p.startedAt ? Date.parse(p.startedAt) : Number.NaN;
   const desk: Desk = {
     id: p.id,
@@ -223,7 +223,7 @@ function helperParts(agentId: string, h: Helper, session: Session | undefined, s
     startedAt: mark?.startedAt ?? null,
     lastAt: mark?.lastAt ?? "",
     working: h.active,
-    trouble: mark?.trouble ?? (h.active ? (session?.trouble ?? null) : null),
+    trouble: h.active ? (mark?.trouble ?? session?.trouble ?? null) : null,
     mark,
   };
 }

@@ -42,8 +42,9 @@ export function useDeskLogs() {
   const fixture = (name: string) => readFileSync(join(FIXTURES, name), "utf8").replaceAll('"/work/', `"${base}/`);
   const line = (o: Record<string, unknown>) =>
     `${JSON.stringify({ sessionId: SESSION, cwd: `${base}/shop-app`, gitBranch: "coupon", userType: "external", ...o })}\n`;
-  const limitLine = (timestamp: string) =>
+  const limitLine = (timestamp: string, extra: Record<string, unknown> = {}) =>
     line({
+      ...extra,
       type: "assistant",
       timestamp,
       isApiErrorMessage: true,
