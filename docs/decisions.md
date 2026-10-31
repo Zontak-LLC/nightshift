@@ -167,12 +167,16 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
 - **Tokens only, no dollars** (the owner, 2026-10-29). The owner is on a flat plan, so per-token prices would mislead,
   and a price table needs upkeep. Each desk shows its tokens (total, input, output, cache read, cache write) and the
   contract's `cost` is always null, never 0. Tokens come from `message.usage` of assistant lines (`turn.usage`); Claude
-  Code repeats one message's usage on each of its lines, so the store keeps the last line per `message.id`. History
-  stored before this change has no `turn.usage`: those desks show tokens as unknown (null).
+  Code repeats one message's usage on each of its lines, so the store keeps the last line per `message.id` (a map per
+  agent, not just the last id: a log read again from the top has new history keys, so `INSERT OR IGNORE` cannot stop
+  it). History stored before this change has no `turn.usage`: those desks show tokens as unknown (null).
 - **One file knows the contract** (`store/desks.ts`), so a change in board-kit's `Agents` is one place to follow.
   Live = as on the board: active, or seen in the last 6 hours and idle. Waiting for the owner (trouble, or an
   `AskUserQuestion` with no answer yet) sorts first. At most 50 desks. A pipeline desk uses its own agent's newest
-  line, never the run's (another ticket's steps must not keep a stalled agent active). The store shows the home
-  folder as `~`, so the CLI sends `board.desks()` as it is, with no extra fields.
-- **Open (issue 15):** the field names are not yet matched to board-kit's `src/contract.ts`; it could not be read from
-  the build sandbox. Match them, pin the board-kit commit in `store/desks.ts`, and test against a copied fixture.
+  line, never the run's (another ticket's steps must not keep a stalled agent active), its own `cwd` when its session's
+  log was not read, and its session's trouble while the ticket is in progress. The store shows the home folder as `~`,
+  so the CLI sends `board.desks()` as it is, with no extra fields.
+- **Open (issue 15), blocks merging:** the field names are not yet matched to board-kit's `src/contract.ts`; no build
+  or review sandbox could read it (2026-10-31: it is not in this repo or in `node_modules`). Put a copy of `contract.ts`
+  and `view-agents.ts` in reach of the build, then match the names, pin the board-kit commit in `store/desks.ts`, test
+  against a copied fixture, and check the Agents tab once by hand.

@@ -7,9 +7,9 @@ import { KEEP_MS, QUIET_MS, type Workers } from "./workers.js";
 /**
  * Desks: one per live agent on this computer (main sessions, background agents, pipeline agents), served read only at
  * `GET /agents` for Motherboard's Agents tab. Meant to follow board-kit's `Agents` / `Agent` contract (`src/contract.ts`,
- * board-kit PR #21, merged 2026-10-27). NOT YET MATCHED: board-kit was not reachable from the build sandbox (builds 1
- * and 2, 2026-10-29), so the names below are unchecked and no board-kit commit is pinned. Match them and note the
- * commit here before merging (issue 15); this file is the only place that knows the mapping.
+ * board-kit PR #21, merged 2026-10-27). NOT YET MATCHED: board-kit is not in this repo and no build sandbox could read
+ * it (2026-10-29 to 2026-10-31), so the names below are unchecked and no board-kit commit is pinned. Match them and note
+ * the commit here before merging (issue 15); this file is the only place that knows the mapping.
  * Tokens only: `cost` is always null, there is no price table (the owner is on a flat plan; see decisions.md).
  */
 export type DeskRole = "main" | "background" | "pipeline";
@@ -45,8 +45,10 @@ type UsageEvent = Extract<NightEvent, { kind: "turn.usage" }>;
 type Mark = {
   model: string | null;
   tokens: DeskTokens | null;
-  /** The message counted last: its later lines (same id) replace its count instead of adding to it. */
-  message: { id: string; tokens: DeskTokens } | null;
+  /** What each message id counts for: a later line of it, or a log read again from the top, replaces its count. */
+  counted: Map<string, DeskTokens>;
+  /** The folder this agent's own lines name: where a pipeline agent works when its session's log was not read. */
+  cwd: string;
   /** The `AskUserQuestion` call still waiting for its answer. */
   asking: string | null;
   /** A background agent's own trouble (pipeline tickets and main sessions keep theirs on the board). */
@@ -77,7 +79,7 @@ function tokensOf(e: UsageEvent): DeskTokens {
 
 function addUsage(m: Mark, e: UsageEvent): void {
   const now = tokensOf(e);
-  const counted = m.message?.id === e.messageId ? m.message.tokens : ZERO;
+  const counted = m.counted.get(e.messageId) ?? ZERO;
   const sum = m.tokens ?? ZERO;
   m.tokens = {
     total: sum.total - counted.total + now.total,
@@ -86,7 +88,7 @@ function addUsage(m: Mark, e: UsageEvent): void {
     cacheRead: sum.cacheRead - counted.cacheRead + now.cacheRead,
     cacheWrite: sum.cacheWrite - counted.cacheWrite + now.cacheWrite,
   };
-  m.message = { id: e.messageId, tokens: now };
+  m.counted.set(e.messageId, now);
   m.model = e.model;
 }
 
@@ -103,7 +105,8 @@ export class DeskLog {
     const m = this.marks.get(key) ?? {
       model: null,
       tokens: null,
-      message: null,
+      counted: new Map(),
+      cwd: "",
       asking: null,
       trouble: null,
       steps: 0,
@@ -117,6 +120,7 @@ export class DeskLog {
       if (e.at > m.lastAt) m.lastAt = e.at;
     }
     if (e.kind === "turn.usage") addUsage(m, e);
+    else if (e.kind === "session.seen") m.cwd = e.cwd;
     else if (e.kind === "session.trouble") m.trouble = troubleFrom(e);
     else if (e.kind === "tool.result" && e.toolUseId === m.asking) m.asking = null;
     else if (e.kind === "reply" || e.kind === "prompt") m.trouble = null;
@@ -170,21 +174,23 @@ function deskOf(p: Parts, nowMs: number): Desk | null {
   };
 }
 
-function ticketParts(t: Ticket & { agentId: string }, home: string, log: DeskLog): Parts {
+function ticketParts(t: Ticket & { agentId: string }, session: Session | undefined, log: DeskLog): Parts {
   const mark = log.get(`agent:${t.agentId}`);
   const own = mark?.lastAt ?? "";
+  const working = t.station === "working" || t.station === "checking";
   return {
     id: `agent:${t.agentId}`,
     role: "pipeline",
     ticket: { number: t.number, title: t.title },
-    folder: home,
+    // A quiet session log is followed from its end, so a run's session can be unknown while its agents work.
+    folder: session?.home ?? mark?.cwd ?? "",
     recent: t.recent,
     steps: t.steps,
     startedAt: t.startedAt ?? mark?.startedAt ?? null,
     // Its own newest line, never the run's: another ticket's steps must not keep a stalled agent active.
     lastAt: t.finishedAt && t.finishedAt > own ? t.finishedAt : own,
-    working: t.station === "working" || t.station === "checking",
-    trouble: t.trouble,
+    working,
+    trouble: working ? (t.trouble ?? session?.trouble ?? null) : t.trouble,
     mark,
   };
 }
@@ -241,9 +247,9 @@ export function desksOf(src: Source, nowMs: number): DesksView {
     });
   }
   for (const run of src.runs.values()) {
-    const home = src.sessions.get(run.sessionId)?.home ?? "";
+    const session = src.sessions.get(run.sessionId);
     for (const t of run.tickets.values())
-      if (t.agentId) parts.push(ticketParts({ ...t, agentId: t.agentId }, home, src.log));
+      if (t.agentId) parts.push(ticketParts({ ...t, agentId: t.agentId }, session, src.log));
   }
   const desks = parts
     .map((p) => deskOf(p, nowMs))
