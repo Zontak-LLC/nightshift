@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { basename } from "node:path";
 import { type NightEvent, type RunEvent, titleInLabel } from "../parser/index.js";
 import { columnsOf, newRun, newTicket, widenTimes } from "./columns.js";
@@ -40,7 +41,7 @@ export type Session = {
   /** Where the session's steps went, by project (its own folder, and any other repository it worked in). */
   places: Map<string, Spot>;
 };
-type Helper = { label: string; step: string | null; lastAt: string; active: boolean };
+export type Helper = { label: string; step: string | null; lastAt: string; active: boolean };
 export type Run = {
   runId: string;
   sessionId: string;
@@ -253,9 +254,9 @@ export class Board {
   }
 
   /** One desk per live agent on this computer, for Motherboard's Agents tab (`GET /agents`, see desks.ts). */
-  desks(nowMs = Date.now()): DesksView {
+  desks(nowMs = Date.now(), home = homedir()): DesksView {
     const { sessions, runs, workers, log, rootOf } = this;
-    return desksOf({ sessions, runs, workers, log, rootOf, isPipeline: (id) => this.agents.has(id) }, nowMs);
+    return desksOf({ sessions, runs, workers, log, home, rootOf, isPipeline: (id) => this.agents.has(id) }, nowMs);
   }
 
   /** A desk's tokens, null when unknown: kept here until board-kit's `Agent` has a field for them. */

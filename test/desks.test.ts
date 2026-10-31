@@ -140,6 +140,89 @@ describe("Motherboard pulls this computer's live agents", () => {
     expect(desk("agent:pipe7")).toMatchObject({ state: "working" });
   });
 
+  it("gives a pipeline's helper agent (no ticket number in its label) exactly one desk", async () => {
+    const { board } = await logs.open();
+    const { run } = logs.paths();
+    writeFileSync(
+      join(run, "agent-help1.jsonl"),
+      logs.line({
+        isSidechain: true,
+        agentId: "help1",
+        type: "assistant",
+        timestamp: "2026-10-29T09:03:00.000Z",
+        message: {
+          id: "msg_h1",
+          model: "claude-sonnet-5-5",
+          content: [{ type: "tool_use", id: "tu_h1", name: "Bash", input: { description: "List open tickets" } }],
+          usage: { input_tokens: 1, output_tokens: 2 },
+        },
+      }),
+    );
+    const journal = join(run, "journal.jsonl");
+    appendFileSync(
+      journal,
+      `${JSON.stringify({ type: "started", key: "v2:h", agentId: "help1", label: "rank open tickets", phase: "Plan" })}\n`,
+    );
+    const helpers = () => (board.desks(NOW).list ?? []).filter((d) => d.id === "agent:help1");
+    expect(await until(() => helpers()[0]?.stepCount === 1)).toBe(true);
+    expect(helpers()).toEqual([
+      {
+        id: "agent:help1",
+        title: "rank open tickets",
+        role: "pipeline agent",
+        project: "shop-app",
+        model: "claude-sonnet-5-5",
+        state: "working",
+        steps: ["List open tickets"],
+        stepCount: 1,
+        costUsd: null,
+        minutes: 2, // still active: from its first line (09:03:00) until now
+      },
+    ]);
+    appendFileSync(
+      journal,
+      `${JSON.stringify({ type: "result", key: "v2:h", agentId: "help1", result: { status: "done" } })}\n`,
+    );
+    expect(await until(() => helpers()[0]?.state === "idle")).toBe(true);
+  });
+
+  it("shows the home folder as ~ in every step and title, wherever it stands", async () => {
+    const home = "/srv/dev"; // short: step lines are cut at 72 characters, and the test folder's path is long
+    const { subagents } = logs.paths();
+    writeFileSync(join(subagents, "agent-bg1.meta.json"), JSON.stringify({ description: `Docs in ${home}/notes` }));
+    const { board } = logs.start();
+    const step = (id: string, input: Record<string, unknown>, name = "Bash") => ({
+      type: "tool_use",
+      id,
+      name,
+      input,
+    });
+    appendFileSync(
+      join(subagents, "agent-bg1.jsonl"),
+      logs.line({
+        isSidechain: true,
+        agentId: "bg1",
+        type: "assistant",
+        timestamp: "2026-10-29T09:04:10.000Z",
+        message: {
+          id: "msg_b5",
+          model: "claude-sonnet-5-5",
+          content: [
+            step("tu_b5", { command: `${home}/bin/deploy --x` }),
+            step("tu_b6", { pattern: `${home}/notes` }, "Grep"),
+            step("tu_b7", { command: `${home}er/bin/deploy` }), // a neighbour of the home folder, not inside it
+          ],
+        },
+      }),
+    );
+    const desk = () => deskOf(board.desks(NOW, home), "background agent");
+    expect(await until(() => desk()?.stepCount === 6 && desk()?.title !== "agent bg1")).toBe(true);
+    expect(desk()?.title).toBe("Docs in ~/notes");
+    expect(desk()?.steps).toEqual(["Running ~/bin/deploy", "Searching for ~/notes", `Running ${home}er/bin/deploy`]);
+    // The same logs with the home folder unset go out as they are: only the home folder decides.
+    expect(deskOf(board.desks(NOW, ""), "background agent")?.steps?.[0]).toBe(`Running ${home}/bin/deploy`);
+  });
+
   it("refuses other hosts and anything but GET, and sends no CORS header", async () => {
     await serveDesks(() => ({ list: [] }));
     const port = server?.port ?? 0;

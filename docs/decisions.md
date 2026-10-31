@@ -193,5 +193,9 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
   when its session's log was not read (a worktree shows as its repo, through the cached `rootOf`). Pipeline and
   background desks take on their session's trouble only while their work is in progress: a finished one stays idle.
   A background desk's title is the agent's description or its id, never its
-  task: the task is the start of its prompt, and prompts stay off this endpoint. No paths go out (`project` is the
-  folder's name), and the CLI sends `board.desks()` as it is, with no extra fields.
+  task: the task is the start of its prompt, and prompts stay off this endpoint. `project` is the folder's name. Steps
+  can hold a path (a Bash command's program word, a raw search pattern), so the home folder shows as `~` in steps and
+  titles as the desk is built. The CLI sends `board.desks()` as it is, with no extra fields.
+- **A pipeline's helpers get desks too.** An agent whose journal label has no ticket number (e.g. "rank open tickets")
+  is in `run.helpers`, not on a ticket, and is never a background agent. It is a pipeline desk with its label as title
+  and no `ticket`; its steps and times come from its own lines (`DeskLog`), because the board keeps only its latest step.

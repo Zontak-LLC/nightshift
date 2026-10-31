@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 import type { NightEvent } from "../parser/index.js";
-import type { Run, Session, Ticket } from "./board.js";
+import type { Helper, Run, Session, Ticket } from "./board.js";
 import type { RootOf } from "./root.js";
 import { type Trouble, troubleFrom } from "./trouble.js";
 import { KEEP_MS, QUIET_MS, type Workers } from "./workers.js";
@@ -148,8 +148,18 @@ type Seated = { desk: Desk; lastAt: string };
 /** The board's words for why it stopped; the steps are the one place the contract has for them. */
 const stopLine = (t: Trouble) => (t.resetsAt ? `${t.reason}, resets ${t.resetsAt}` : t.reason);
 
+/**
+ * Text with the home folder shown as `~`, wherever it stands: a step keeps a command's program word and a search's raw
+ * pattern. The name must end there, or a neighbouring folder whose name starts the same would pass for it.
+ */
+function homeHider(home: string): (text: string) => string {
+  if (!home) return (text) => text;
+  const homeFolder = new RegExp(`${home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}_-])`, "gu");
+  return (text) => text.replace(homeFolder, "~");
+}
+
 /** One desk, or null when it was quiet too long to count as live. */
-function deskOf(p: Parts, nowMs: number): Seated | null {
+function deskOf(p: Parts, nowMs: number, hideHome: (text: string) => string): Seated | null {
   const at = Date.parse(p.lastAt);
   if (!p.folder || Number.isNaN(at) || nowMs - at > KEEP_MS) return null;
   const active = p.working && nowMs - at <= QUIET_MS;
@@ -157,13 +167,13 @@ function deskOf(p: Parts, nowMs: number): Seated | null {
   const start = p.startedAt ? Date.parse(p.startedAt) : Number.NaN;
   const desk: Desk = {
     id: p.id,
-    title: p.title,
+    title: hideHome(p.title),
     role: p.role,
     ...(p.ticket && { ticket: p.ticket }),
     project: basename(p.folder) || p.folder,
     ...(p.mark?.model && { model: p.mark.model }),
     state,
-    steps: (p.trouble ? [...p.recent, stopLine(p.trouble)] : p.recent).slice(-RECENT),
+    steps: (p.trouble ? [...p.recent, stopLine(p.trouble)] : p.recent).slice(-RECENT).map(hideHome),
     stepCount: p.steps,
     costUsd: null,
     ...(!Number.isNaN(start) && { minutes: Math.round(Math.max(0, (active ? nowMs : at) - start) / 60_000) }),
@@ -172,18 +182,22 @@ function deskOf(p: Parts, nowMs: number): Seated | null {
   return { desk, lastAt: p.lastAt };
 }
 
+/** Where a pipeline agent works. A quiet session log is followed from its end, so its session can be unknown. */
+function pipelineFolder(session: Session | undefined, mark: Mark | undefined, src: Source): string {
+  const cwd = mark?.cwd ?? "";
+  return session?.home ?? src.rootOf(cwd)?.root ?? cwd;
+}
+
 function ticketParts(t: Ticket & { agentId: string }, session: Session | undefined, src: Source): Parts {
   const mark = src.log.get(`agent:${t.agentId}`);
   const own = mark?.lastAt ?? "";
-  const cwd = mark?.cwd ?? "";
   const working = t.station === "working" || t.station === "checking";
   return {
     id: `agent:${t.agentId}`,
     role: "pipeline agent",
     title: t.title,
     ticket: `#${t.number}`,
-    // A quiet session log is followed from its end, so a run's session can be unknown while its agents work.
-    folder: session?.home ?? src.rootOf(cwd)?.root ?? cwd,
+    folder: pipelineFolder(session, mark, src),
     recent: t.recent,
     steps: t.steps,
     startedAt: t.startedAt ?? mark?.startedAt ?? null,
@@ -195,11 +209,32 @@ function ticketParts(t: Ticket & { agentId: string }, session: Session | undefin
   };
 }
 
+/** A pipeline agent with no ticket (a label with no number): the board keeps only its latest step, so its mark counts. */
+function helperParts(agentId: string, h: Helper, session: Session | undefined, src: Source): Parts {
+  const mark = src.log.get(`agent:${agentId}`);
+  return {
+    id: `agent:${agentId}`,
+    role: "pipeline agent",
+    title: h.label,
+    ticket: null,
+    folder: pipelineFolder(session, mark, src),
+    recent: mark?.recent ?? [],
+    steps: mark?.steps ?? 0,
+    startedAt: mark?.startedAt ?? null,
+    lastAt: mark?.lastAt ?? "",
+    working: h.active,
+    trouble: mark?.trouble ?? (h.active ? (session?.trouble ?? null) : null),
+    mark,
+  };
+}
+
 type Source = {
   sessions: Map<string, Session>;
   runs: Map<string, Run>;
   workers: Workers;
   log: DeskLog;
+  /** The home folder, shown as `~` in what goes out. */
+  home: string;
   /** The repository of a folder, so a worktree shows as its repo (cached: no disk read per pull). */
   rootOf: RootOf;
   /** Agents a pipeline started: they are pipeline desks, never background ones. */
@@ -249,8 +284,10 @@ export function desksOf(src: Source, nowMs: number): DesksView {
     const session = src.sessions.get(run.sessionId);
     for (const t of run.tickets.values())
       if (t.agentId) parts.push(ticketParts({ ...t, agentId: t.agentId }, session, src));
+    for (const [agentId, h] of run.helpers) parts.push(helperParts(agentId, h, session, src));
   }
-  const seated = parts.map((p) => deskOf(p, nowMs)).filter((s) => s !== null);
+  const hideHome = homeHider(src.home);
+  const seated = parts.map((p) => deskOf(p, nowMs, hideHome)).filter((s) => s !== null);
   seated.sort(
     (a, b) =>
       Number(b.desk.state === "waits") - Number(a.desk.state === "waits") ||
