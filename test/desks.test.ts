@@ -1,4 +1,4 @@
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { join } from "node:path";
 import { afterEach, describe, expect, expectTypeOf, it } from "vitest";
@@ -100,6 +100,15 @@ describe("Motherboard pulls this computer's live agents", () => {
     // Only the desk's own fields go out: no extra keys, no personal paths.
     for (const d of view.agents) expect(Object.keys(d).sort()).toEqual(DESK_KEYS);
     expect(JSON.stringify(view)).not.toContain(base);
+  });
+
+  it("never sends a background agent's prompt: with no meta file its desk is named by its id", async () => {
+    rmSync(join(logs.paths().subagents, "agent-bg1.meta.json"));
+    const { board } = logs.start();
+    const background = () => deskOf(board.desks(NOW), "background");
+    expect(await until(() => background()?.steps === 3)).toBe(true);
+    expect(background()?.ticket).toEqual({ number: null, title: "agent bg1" });
+    expect(JSON.stringify(board.desks(NOW))).not.toContain("Update the docs");
   });
 
   it("keeps each pipeline agent's own time: a stalled ticket goes idle while its neighbour works", async () => {

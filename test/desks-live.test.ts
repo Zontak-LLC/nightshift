@@ -1,4 +1,4 @@
-import { appendFileSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { deskOf, NOW, RESET, SESSION, until, useDeskLogs } from "./desks-logs.js";
@@ -45,6 +45,39 @@ describe("a pipeline agent whose session is quiet or stopped", () => {
     expect(await until(() => pipeline()?.steps === 3)).toBe(true);
     expect(deskOf(board.desks(NOW, logs.base()), "main")).toBeUndefined();
     expect(pipeline()).toMatchObject({ id: "agent:pipe7", project: "shop-app", folder: "~/shop-app", state: "active" });
+  });
+
+  it("files agents in a linked worktree under the repo, not the worktree's folder", async () => {
+    const base = logs.base();
+    const tree = join(base, "dayshift-work", "shop-app-R-7");
+    mkdirSync(tree, { recursive: true });
+    writeFileSync(join(tree, ".git"), `gitdir: ${base}/shop-app/.git/worktrees/shop-app-R-7\n`);
+    const { session, run, subagents } = logs.paths();
+    const pipe = join(run, "agent-pipe7.jsonl");
+    writeFileSync(pipe, readFileSync(pipe, "utf8").replaceAll(`"cwd":"${base}/shop-app"`, `"cwd":"${tree}"`));
+    // A background agent whose steps name no path: only its cwd says where it works.
+    writeFileSync(
+      join(subagents, "agent-bg2.jsonl"),
+      logs.line({
+        isSidechain: true,
+        agentId: "bg2",
+        cwd: tree,
+        type: "assistant",
+        timestamp: "2026-10-29T09:04:10.000Z",
+        message: {
+          id: "msg_w1",
+          model: "claude-opus-5-5",
+          content: [{ type: "tool_use", id: "tu_w1", name: "Bash", input: { command: "ls" } }],
+        },
+      }),
+    );
+    const old = new Date(Date.now() - 3600_000);
+    utimesSync(session, old, old);
+    const { board } = logs.start();
+    const desk = (id: string) => board.desks(NOW, base).agents.find((d) => d.id === id);
+    expect(await until(() => desk("agent:pipe7")?.steps === 3 && desk("agent:bg2")?.steps === 1)).toBe(true);
+    expect(desk("agent:pipe7")).toMatchObject({ project: "shop-app", folder: "~/shop-app" });
+    expect(desk("agent:bg2")).toMatchObject({ project: "shop-app", folder: "~/shop-app" });
   });
 
   it("waits for the owner when its session hits a usage limit, until the session goes on", async () => {

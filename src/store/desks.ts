@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import type { NightEvent } from "../parser/index.js";
 import type { Run, Session, Ticket } from "./board.js";
+import type { RootOf } from "./root.js";
 import { type Trouble, troubleFrom } from "./trouble.js";
 import { KEEP_MS, QUIET_MS, type Workers } from "./workers.js";
 
@@ -174,16 +175,17 @@ function deskOf(p: Parts, nowMs: number): Desk | null {
   };
 }
 
-function ticketParts(t: Ticket & { agentId: string }, session: Session | undefined, log: DeskLog): Parts {
-  const mark = log.get(`agent:${t.agentId}`);
+function ticketParts(t: Ticket & { agentId: string }, session: Session | undefined, src: Source): Parts {
+  const mark = src.log.get(`agent:${t.agentId}`);
   const own = mark?.lastAt ?? "";
+  const cwd = mark?.cwd ?? "";
   const working = t.station === "working" || t.station === "checking";
   return {
     id: `agent:${t.agentId}`,
     role: "pipeline",
     ticket: { number: t.number, title: t.title },
     // A quiet session log is followed from its end, so a run's session can be unknown while its agents work.
-    folder: session?.home ?? mark?.cwd ?? "",
+    folder: session?.home ?? src.rootOf(cwd)?.root ?? cwd,
     recent: t.recent,
     steps: t.steps,
     startedAt: t.startedAt ?? mark?.startedAt ?? null,
@@ -205,6 +207,8 @@ type Source = {
   runs: Map<string, Run>;
   workers: Workers;
   log: DeskLog;
+  /** The repository of a folder, so a worktree shows as its repo (cached: no disk read per pull). */
+  rootOf: RootOf;
   /** Agents a pipeline started: they are pipeline desks, never background ones. */
   isPipeline: (agentId: string) => boolean;
   /** The home folder, shown as `~` ("" leaves paths as they are). */
@@ -235,8 +239,9 @@ export function desksOf(src: Source, nowMs: number): DesksView {
     parts.push({
       id: `agent:${w.agentId}`,
       role: "background",
-      ticket: { number: null, title: w.title ?? w.task ?? `agent ${w.agentId.slice(0, 6)}` },
-      folder: place.folder,
+      // Never `w.task`: that is the start of the agent's prompt, and prompts stay off this endpoint.
+      ticket: { number: null, title: w.title ?? `agent ${w.agentId.slice(0, 6)}` },
+      folder: src.rootOf(place.folder)?.root ?? place.folder,
       recent: w.recent,
       steps: w.steps,
       startedAt: w.startedAt,
@@ -249,7 +254,7 @@ export function desksOf(src: Source, nowMs: number): DesksView {
   for (const run of src.runs.values()) {
     const session = src.sessions.get(run.sessionId);
     for (const t of run.tickets.values())
-      if (t.agentId) parts.push(ticketParts({ ...t, agentId: t.agentId }, session, src.log));
+      if (t.agentId) parts.push(ticketParts({ ...t, agentId: t.agentId }, session, src));
   }
   const desks = parts
     .map((p) => deskOf(p, nowMs))
