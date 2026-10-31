@@ -146,4 +146,54 @@ describe("waits for you", () => {
     );
     expect(await until(() => deskOf(board.desks(NOW), "background agent")?.state !== "waits")).toBe(true);
   });
+
+  /** The owner answers the background agent, so only its session's trouble can make it wait. */
+  const answer = () =>
+    appendFileSync(
+      join(logs.paths().subagents, "agent-bg1.jsonl"),
+      logs.line({
+        isSidechain: true,
+        agentId: "bg1",
+        type: "user",
+        timestamp: "2026-10-29T09:03:40.000Z",
+        message: { role: "user", content: [{ tool_use_id: "tu_b3", type: "tool_result", content: "Before" }] },
+      }),
+    );
+
+  it("does not wait for a usage limit its session hits after the agent finished", async () => {
+    const { board } = await logs.open();
+    answer();
+    appendFileSync(
+      join(logs.paths().subagents, "agent-bg1.jsonl"),
+      logs.line({
+        isSidechain: true,
+        agentId: "bg1",
+        type: "assistant",
+        timestamp: "2026-10-29T09:03:50.000Z",
+        message: {
+          id: "msg_b4",
+          model: "claude-sonnet-5-5",
+          stop_reason: "end_turn",
+          content: [{ type: "text", text: "Docs done." }],
+        },
+      }),
+    );
+    const background = () => deskOf(board.desks(NOW), "background agent");
+    expect(await until(() => background()?.state === "idle")).toBe(true);
+    appendFileSync(logs.paths().session, logs.limitLine("2026-10-29T09:04:30.000Z"));
+    expect(await until(() => deskOf(board.desks(NOW), "main session")?.state === "waits")).toBe(true);
+    expect(background()?.state).toBe("idle");
+    expect(background()?.steps).toEqual(["Reading guide.md", "Editing guide.md", "AskUserQuestion"]);
+    expect(board.desks(NOW).list?.[0]?.role).toBe("main session"); // the finished agent does not sort to the top
+  });
+
+  it("waits with its session when the agent is still working at the limit", async () => {
+    const { board } = await logs.open();
+    answer();
+    const background = () => deskOf(board.desks(NOW), "background agent");
+    expect(await until(() => background()?.state === "working")).toBe(true);
+    appendFileSync(logs.paths().session, logs.limitLine("2026-10-29T09:04:30.000Z"));
+    expect(await until(() => background()?.state === "waits")).toBe(true);
+    expect(background()?.steps?.at(-1)).toBe(STOPPED);
+  });
 });

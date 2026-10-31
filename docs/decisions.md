@@ -183,13 +183,15 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
 - **Why it waits goes in `steps`.** `state: "waits"` says that it waits; the contract has no reason field, so a stopped
   agent's newest step is the board's word plus the reset time (`usage_limit, resets <time>`). A question needs none:
   its newest step is already `AskUserQuestion`.
-- **The Agents tab is checked by hand after merge.** board-kit is not a package here and `view-agents.ts` needs its
-  `agents.ts` and `view-html.ts`, which were not copied, so no test renders the desks. After merge, point Motherboard
-  at `/agents` and look once at the tab.
+- **The Agents tab is checked by hand after merge** (the owner, 2026-10-31). Not done yet: board-kit is not a package
+  here and `view-agents.ts` needs its `agents.ts` and `view-html.ts`, which were neither copied nor read, so nothing so
+  far shows the payload draws as desks. After merge, point Motherboard at `/agents` and confirm once that the desks
+  show with `costUsd: null` and no `stage`, and that a `waits` desk draws as waiting. Then write the result here.
 - **What counts as live.** As on the board: active, or seen in the last 6 hours and idle. Waiting for the owner (trouble,
   or an `AskUserQuestion` with no answer yet) sorts first. At most 50 desks. A pipeline desk uses its own agent's newest
   line, never the run's (another ticket's steps must not keep a stalled agent active), the repository of its own `cwd`
-  when its session's log was not read (a worktree shows as its repo, through the cached `rootOf`), and its session's
-  trouble while the ticket is in progress. A background desk's title is the agent's description or its id, never its
+  when its session's log was not read (a worktree shows as its repo, through the cached `rootOf`). Pipeline and
+  background desks take on their session's trouble only while their work is in progress: a finished one stays idle.
+  A background desk's title is the agent's description or its id, never its
   task: the task is the start of its prompt, and prompts stay off this endpoint. No paths go out (`project` is the
   folder's name), and the CLI sends `board.desks()` as it is, with no extra fields.

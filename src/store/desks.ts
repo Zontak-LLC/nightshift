@@ -240,7 +240,8 @@ export function desksOf(src: Source, nowMs: number): DesksView {
       startedAt: w.startedAt,
       lastAt: w.lastAt,
       working: !w.ended,
-      trouble: mark?.trouble ?? src.sessions.get(w.parent)?.trouble ?? null,
+      // Its session's trouble stops only the work in progress: an agent that finished is not held up by it.
+      trouble: mark?.trouble ?? (w.ended ? null : (src.sessions.get(w.parent)?.trouble ?? null)),
       mark,
     });
   }
