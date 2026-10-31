@@ -249,6 +249,11 @@ describe("the terminal tags background agents", () => {
     const events: NightEvent[] = [];
     follow(board, events);
     expect(await until(() => board.view("nightwatch", NOW).agents[0]?.steps === 3)).toBe(true);
+    // The watcher reads the meta files after all the agents' logs: wait for the names the lines below are tagged with.
+    const named = (id: string, name: string) => board.agentLabel(id)?.name === name;
+    expect(
+      await until(() => named("aaa111", "Night Watch: build the dashboard") && named("bbb222", "Fix the week page")),
+    ).toBe(true);
     const print = terminalPrinter((id) => board.agentLabel(id));
     const lines = events.map(print).filter((l): l is string => l !== null);
     const mine = lines.filter((l) => l.includes("[Night Watch: build"));

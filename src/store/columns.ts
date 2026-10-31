@@ -1,4 +1,8 @@
-import type { Station, Ticket } from "./board.js";
+import type { Run, Station, Ticket } from "./board.js";
+
+export function newRun(runId: string, sessionId: string): Run {
+  return { runId, sessionId, tickets: new Map(), helpers: new Map(), startedAt: null, lastAt: "", seen: 0 };
+}
 
 export function widenTimes(t: Ticket, at: string): boolean {
   if (!at) return false;

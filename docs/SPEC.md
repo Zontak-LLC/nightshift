@@ -87,6 +87,11 @@ Claude Code log files ──► Watcher ──► Parser ──► Event store (
 - **Parser:** turns one raw log line into one Night Shift event (`session.started`, `tool.read`, `tool.edit`, `tool.command`, `tool.result`, `agent.started`, `agent.finished`, ...). Pure functions, no file access, fully tested.
 - **Event store:** writes events to SQLite and keeps the current state of each session in memory.
 - **Stream:** `GET /events` sends every new event to the open pages (SSE); `GET /state` returns the current state for a page that just opened.
+- **Desks:** `GET /agents` (`http://127.0.0.1:4400/agents`, the port is `NIGHTSHIFT_PORT`) returns every live agent as
+  JSON in board-kit's `Agents` shape (`list` of `Agent`, commit 0c60024) for Motherboard's Agents tab: role, title and
+  ticket, repo, model, current step and the two before it, step count, run time and `state` (`waits` = "waits for
+  you"). Read only (other methods get 405), `cache-control: no-store`, this computer only (Host check), no CORS. No
+  dollar cost: `costUsd` is null. Tokens are kept per agent, but the contract has no field for them yet (decisions.md).
 - **Page:** plain TypeScript and CSS (no framework needed for v1), drawn from the state plus the stream.
 - **Layers only point one way:** page → stream → store → parser. The page never reads files; the parser never touches the database. An architecture test enforces it.
 

@@ -1,6 +1,8 @@
+import { homedir } from "node:os";
 import { basename } from "node:path";
 import { type NightEvent, type RunEvent, titleInLabel } from "../parser/index.js";
-import { columnsOf, newTicket, widenTimes } from "./columns.js";
+import { columnsOf, newRun, newTicket, widenTimes } from "./columns.js";
+import { DeskLog, type DesksView, type DeskTokens, desksOf } from "./desks.js";
 import { type NowRow, nowRows, placeStep, type Spot } from "./places.js";
 import { type RootOf, repoRootOf } from "./root.js";
 import { type Alert, alertsOf, pauseTicket, type Trouble, troubleFrom } from "./trouble.js";
@@ -28,7 +30,7 @@ export type Ticket = {
   agentId: string | null;
   trouble: Trouble | null;
 };
-type Session = {
+export type Session = {
   cwd: string;
   /** The repository the session started in (a subfolder or worktree counts as its main repository), else the cwd. */
   home: string;
@@ -39,8 +41,8 @@ type Session = {
   /** Where the session's steps went, by project (its own folder, and any other repository it worked in). */
   places: Map<string, Spot>;
 };
-type Helper = { label: string; step: string | null; lastAt: string; active: boolean };
-type Run = {
+export type Helper = { label: string; step: string | null; lastAt: string; active: boolean };
+export type Run = {
   runId: string;
   sessionId: string;
   tickets: Map<number, Ticket>;
@@ -86,6 +88,7 @@ export class Board {
   private agents = new Map<string, { runId: string; number: number | null }>();
   private clock = 0;
   private workers: Workers;
+  private log = new DeskLog();
 
   constructor(private readonly rootOf: RootOf = repoRootOf) {
     this.workers = new Workers(rootOf, (id) => this.sessions.get(id)?.cwd ?? null);
@@ -98,7 +101,9 @@ export class Board {
 
   /** Applies one event; returns true when something on a board changed. */
   apply(event: NightEvent | RunEvent): boolean {
-    return "runId" in event ? this.applyRun(event) : this.applySession(event);
+    if ("runId" in event) return this.applyRun(event);
+    this.log.note(event);
+    return event.kind !== "turn.usage" && this.applySession(event); // tokens alone never redraw a board page
   }
 
   private applySession(e: NightEvent): boolean {
@@ -160,19 +165,8 @@ export class Board {
   }
 
   private runFor(e: RunEvent): Run {
-    let run = this.runs.get(e.runId);
-    if (!run) {
-      run = {
-        runId: e.runId,
-        sessionId: e.sessionId,
-        tickets: new Map(),
-        helpers: new Map(),
-        startedAt: null,
-        lastAt: "",
-        seen: 0,
-      };
-      this.runs.set(e.runId, run);
-    }
+    const run = this.runs.get(e.runId) ?? newRun(e.runId, e.sessionId);
+    this.runs.set(e.runId, run);
     return run;
   }
 
@@ -257,6 +251,17 @@ export class Board {
       r.open = [...(run?.tickets.values() ?? [])].filter((t) => !["done", "skipped"].includes(t.station)).length;
     }
     return [...rows.values()].sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+  }
+
+  /** One desk per live agent on this computer, for Motherboard's Agents tab (`GET /agents`, see desks.ts). */
+  desks(nowMs = Date.now(), home = homedir()): DesksView {
+    const { sessions, runs, workers, log, rootOf } = this;
+    return desksOf({ sessions, runs, workers, log, home, rootOf, isPipeline: (id) => this.agents.has(id) }, nowMs);
+  }
+
+  /** A desk's tokens, null when unknown: kept here until board-kit's `Agent` has a field for them. */
+  deskTokens(deskId: string): DeskTokens | null {
+    return this.log.get(deskId)?.tokens ?? null;
   }
 
   /** One project's board: its newest session's place, what is happening now, and its newest pipeline run. */

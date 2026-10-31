@@ -72,12 +72,13 @@ async function start(): Promise<void> {
       };
     },
     projects: tiles,
+    agents: () => board.desks(Date.now()),
   });
   publish = server.publish;
   refresh = server.refresh;
   setInterval(server.refresh, 30_000).unref(); // the meter changes without any event
   console.info(
-    `Night Shift ${pkg.version} · watching ${root}\nHistory: ${join(dataDir, "nightshift.db")} (${keepDays} days)\nBoard: http://localhost:${server.port}/\n`,
+    `Night Shift ${pkg.version} · watching ${root}\nHistory: ${join(dataDir, "nightshift.db")} (${keepDays} days)\nBoard: http://localhost:${server.port}/\nDesks: http://localhost:${server.port}/agents\n`,
   );
   const quit = async () => {
     engine.stop();

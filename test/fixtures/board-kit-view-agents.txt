@@ -1,0 +1,56 @@
+// Copied from board-kit commit 0c60024, src/view-agents.ts. Reference only; the contract wins.
+import { agentStats, type Desk, desks, quiet } from "./agents.js";
+import type { Board } from "./contract.js";
+import { each, esc } from "./view-html.js";
+
+/** The Agents view's stat row: WORKING · WAITS FOR YOU (in `--warn` above 0) · DONE TODAY · STEPS / HOUR. */
+export function agentStatsHtml(board: Board): string {
+  return each(
+    agentStats(board),
+    (s) =>
+      `<div class="stat"><span class="k">${s.key}</span><b data-stat="${s.key}"${s.warn ? ' class="warn"' : ""}>${esc(s.value)}</b></div>`,
+  );
+}
+
+/**
+ * A desk's one button: the same `.act` button and 'Not sent' line as a Work card, posted by the same script
+ * (`src/view-work-script.ts`), which sends `{ agent, action }` when the button names an agent.
+ */
+function button(d: Desk): string {
+  const b = d.button;
+  if (!b) return `<span>${esc(d.stepCount ?? "")}</span>`;
+  return `<span><button type="button" class="act" data-agent="${esc(b.body.agent)}" data-action="${b.body.action}">${esc(b.label)}</button><span class="fail" hidden>Not sent, try again</span></span>`;
+}
+
+/** One desk: name and run time, project and model, five dashes, the last three steps, then step count and cost. */
+export function deskHtml(d: Desk): string {
+  const dashes = each(d.dashes, (s) => `<i class="seg ${s}"></i>`);
+  const steps = [
+    ...d.earlier.map((s) => `<li>${esc(s)}</li>`),
+    d.current !== undefined ? `<li class="cur"><span class="mk">▸ </span>${esc(d.current)}</li>` : "",
+  ].join("");
+  return [
+    `<article class="desk${d.waits ? " waits" : ""}" data-agent="${esc(d.id)}"${d.color ? ` style="--pc:${esc(d.color)}"` : ""}>`,
+    `<div class="dh"><span class="dname">${esc(d.name)}</span>`,
+    d.runTime ? `<span class="dtime">${esc(d.runTime)}</span>` : "",
+    "</div>",
+    d.who ? `<div class="who">${esc(d.who)}</div>` : "",
+    `<div class="dashes">${dashes}</div>`,
+    steps ? `<ul class="steps">${steps}</ul>` : "",
+    `<div class="foot">${button(d)}<span>${esc(d.cost)}</span></div>`,
+    "</article>",
+  ].join("");
+}
+
+/** The Agents view: the desks (or 'No agent is working right now.'), then the Quiet line when an agent is quiet. */
+export function agentsView(board: Board): string {
+  const shown = desks(board);
+  const chips = quiet(board);
+  const body = shown.length
+    ? `<div class="desks">${each(shown, deskHtml)}</div>`
+    : '<p class="none">No agent is working right now.</p>';
+  const line = chips.length
+    ? `<div class="quiet"><span class="qk">QUIET</span>${each(chips, (c) => `<span class="qchip q-${c.state}">${esc(c.text)}</span>`)}</div>`
+    : "";
+  return `<div class="agents">${body}${line}</div>`;
+}

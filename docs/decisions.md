@@ -156,3 +156,46 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
     not move left to right. Open ones (any severity, colour by severity) and the five newest resolved ones. The advice is
     the fix Night Watch proposes, else the first triage step. "Healed by" needs a fix attempt with the verdict "healed".
   - Ruled out: buttons that act on Night Watch (resolve, retriage, open an issue). Those stay in Night Watch.
+
+## Motherboard's Desks (issue 15, 2026-10-29)
+
+- **Pull, not push.** Motherboard reads `GET /agents`; Night Shift never sends anything anywhere. It is the same
+  pattern as the rest of the server (127.0.0.1 only, the Host check against DNS rebinding) and needs no address,
+  token or retry logic on our side. A stream (SSE) can come later if a pull every few seconds is not enough.
+- **No CORS on purpose.** The payload lists what every agent is doing. Without CORS headers no page on another origin
+  can read it, so Motherboard's server side must do the pull. That is intended.
+- **Tokens only, no dollars** (the owner, 2026-10-29). The owner is on a flat plan, so per-token prices would mislead,
+  and a price table needs upkeep. The store adds up tokens per agent (total, input, output, cache read, cache write)
+  and the contract's `costUsd` is always null, never 0. Tokens come from `message.usage` of assistant lines
+  (`turn.usage`); Claude Code repeats one message's usage on each of its lines, so the store keeps the last line per
+  `message.id` (a map per agent, not just the last id: a log read again from the top has new history keys, so
+  `INSERT OR IGNORE` cannot stop it). History stored before this change has no `turn.usage`: its tokens are unknown.
+- **Follow-up for board-kit: a token field.** The contract (commit 0c60024) has no field for tokens, so `GET /agents`
+  does not send them yet and the desks show no token count. The totals wait in `Board.deskTokens`; when `Agent` gets a
+  field, add it to `Desk` and `deskOf`. Not squeezed into `model` or `steps`: those keep their own meaning.
+- **One file knows the contract** (`store/desks.ts`, matched to board-kit commit 0c60024), so a change in board-kit's
+  `Agents` is one place to follow. Only the contract's keys go out; the copies in `test/fixtures/` (`board-kit-contract.txt`,
+  `board-kit-view-agents.txt`, the typed `board-kit-agents.ts`) are what the tests hold the payload against. Mapping:
+  `title` is the ticket's, session's or agent's title, `ticket` a pipeline's `#7`, `role` the words main session /
+  background agent / pipeline agent, `minutes` the run time in whole minutes, `idleMinutes` set when idle. Left out:
+  `action` (read only, no buttons), `stage` and `finishedAt` (the spec asks for neither), and `done`, because a
+  finished agent shows as idle, as the spec says, so DONE TODAY stays empty for now.
+- **Why it waits goes in `steps`.** `state: "waits"` says that it waits; the contract has no reason field, so a stopped
+  agent's newest step is the board's word plus the reset time (`usage_limit, resets <time>`). A question needs none:
+  its newest step is already `AskUserQuestion`.
+- **The Agents tab is checked by hand after merge** (the owner, 2026-10-31). Not done yet: board-kit is not a package
+  here and `view-agents.ts` needs its `agents.ts` and `view-html.ts`, which were neither copied nor read, so nothing so
+  far shows the payload draws as desks. After merge, point Motherboard at `/agents` and confirm once that the desks
+  show with `costUsd: null` and no `stage`, and that a `waits` desk draws as waiting. Then write the result here.
+- **What counts as live.** As on the board: active, or seen in the last 6 hours and idle. Waiting for the owner (trouble,
+  or an `AskUserQuestion` with no answer yet) sorts first. At most 50 desks. A pipeline desk uses its own agent's newest
+  line, never the run's (another ticket's steps must not keep a stalled agent active), the repository of its own `cwd`
+  when its session's log was not read (a worktree shows as its repo, through the cached `rootOf`). Pipeline and
+  background desks take on their session's trouble only while their work is in progress: a finished one stays idle.
+  A background desk's title is the agent's description or its id, never its
+  task: the task is the start of its prompt, and prompts stay off this endpoint. `project` is the folder's name. Steps
+  can hold a path (a Bash command's program word, a raw search pattern), so the home folder shows as `~` in steps and
+  titles as the desk is built. The CLI sends `board.desks()` as it is, with no extra fields.
+- **A pipeline's helpers get desks too.** An agent whose journal label has no ticket number (e.g. "rank open tickets")
+  is in `run.helpers`, not on a ticket, and is never a background agent. It is a pipeline desk with its label as title
+  and no `ticket`; its steps and times come from its own lines (`DeskLog`), because the board keeps only its latest step.
