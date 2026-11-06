@@ -1,5 +1,5 @@
 /**
- * The Night Watch parts of the page, as pure functions that are tested here AND sent to the browser as their own
+ * The Sentinel parts of the page, as pure functions that are tested here AND sent to the browser as their own
  * source (the same trick as shift.ts, so each one stands alone: no imports, no outside values).
  */
 export type WatchIn = {
@@ -19,13 +19,13 @@ export function watchStrip(w: WatchIn): { light: string; headline: string; open:
   if (w.status !== "up") {
     return {
       light: "off",
-      headline: w.status === "connecting" ? "Night Watch: connecting…" : "Night Watch: not running",
+      headline: w.status === "connecting" ? "Sentinel: connecting…" : "Sentinel: not running",
       open: "",
       release: "",
     };
   }
   if (!w.site) {
-    return { light: "off", headline: "Night Watch does not list the site “" + w.siteId + "”", open: "", release: "" };
+    return { light: "off", headline: "Sentinel does not list the site “" + w.siteId + "”", open: "", release: "" };
   }
   const s = w.site;
   const word =

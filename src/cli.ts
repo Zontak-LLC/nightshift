@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The `nightshift` command: wires the watcher to the server and the terminal. See CLAUDE.md for the layers.
+// Lens's `nightshift` command: wires the watcher to the server and the terminal. See CLAUDE.md for the layers.
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -9,7 +9,7 @@ import type { NightEvent, RunEvent } from "./parser/index.js";
 import { startServer } from "./server/index.js";
 import { DEFAULT_KEEP_DAYS, expand, loadPinned, projectTiles, repoOf, watchSiteOf } from "./store/index.js";
 import { terminalPrinter } from "./terminal.js";
-import { parseArgs, usage } from "./usage.js";
+import { parseArgs, startBanner, usage } from "./usage.js";
 import { localWatchUrl, startWatchClient, watchOnBoard, watchOnTile } from "./watch/index.js";
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
@@ -78,7 +78,7 @@ async function start(): Promise<void> {
   refresh = server.refresh;
   setInterval(server.refresh, 30_000).unref(); // the meter changes without any event
   console.info(
-    `Night Shift ${pkg.version} · watching ${root}\nHistory: ${join(dataDir, "nightshift.db")} (${keepDays} days)\nBoard: http://localhost:${server.port}/\nDesks: http://localhost:${server.port}/agents\n`,
+    startBanner({ version: pkg.version, root, db: join(dataDir, "nightshift.db"), keepDays, port: server.port }),
   );
   const quit = async () => {
     engine.stop();

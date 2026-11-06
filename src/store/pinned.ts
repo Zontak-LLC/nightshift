@@ -4,27 +4,18 @@ import type { ProjectRow } from "./board.js";
 
 /**
  * One line of `~/.nightshift/projects.json`: a folder, the name to show, `hide` to drop an auto-added repo, and
- * `watchSite` (the id of the site Night Watch watches for this project; "" = none).
+ * `watchSite` (the id of the site Sentinel watches for this project; "" = none).
  */
 export type Pinned = { path: string; name: string; hide?: boolean; watchSite?: string };
 /** A tile on the start page. `project` is the folder name (the board's address); `name` is what people read. */
 export type Tile = ProjectRow & { name: string; active: boolean; pinned: boolean; watchSite: string | null };
 
-/** The Night Watch site of the two projects it watches, used when a line says nothing (keys are folder names). */
-export const DEFAULT_WATCH_SITES: Record<string, string> = { magsmith: "loader", usehourly: "usehourly" };
-/** The Night Watch site for a project (folder name): the line's `watchSite`, else the default, else none. */
+/** The Sentinel site for a project (folder name): the line's `watchSite`, else none. */
 export function watchSiteOf(pinned: Pinned[], project: string, home: string): string | null {
-  const line = pinned.find((p) => basename(expand(p.path, home)) === project);
-  const site = line?.watchSite ?? DEFAULT_WATCH_SITES[project];
+  const site = pinned.find((p) => basename(expand(p.path, home)) === project)?.watchSite;
   return site?.trim() ? site.trim() : null;
 }
 
-export const DEFAULT_PINNED: Pinned[] = [
-  { path: "~/Projects/magsmith", name: "Loader", watchSite: "loader" },
-  { path: "~/Projects/usehourly", name: "UseHourly", watchSite: "usehourly" },
-  { path: "~/Projects/nightwatch", name: "Night Watch" },
-  { path: "~/Projects/nightshift", name: "Night Shift" },
-];
 /** A repository next to the pinned ones is added by itself when Claude worked in it this recently. */
 export const AUTO_DAYS = 30;
 /** A project with a step this recently counts as busy even when no pipeline or agent is running. */
@@ -42,16 +33,19 @@ function parseLine(item: unknown): Pinned {
   return { path: o.path.trim(), name, ...(o.hide === true ? { hide: true } : {}), ...watch };
 }
 
-/** Reads the list; a missing file is created with the defaults, a damaged one is ignored (defaults) and reported. */
+/**
+ * Reads the list; a missing file is created empty (a new install pins nothing: recent repos and busy projects still
+ * show), a damaged one is ignored (empty list) and reported.
+ */
 export function loadPinned(file: string, warn: (message: string) => void): Pinned[] {
   if (!existsSync(file)) {
     try {
       mkdirSync(dirname(file), { recursive: true });
-      writeFileSync(file, `${JSON.stringify(DEFAULT_PINNED, null, 2)}\n`);
+      writeFileSync(file, "[]\n");
     } catch (error) {
       warn(`could not create ${file}: ${error instanceof Error ? error.message : String(error)}`);
     }
-    return DEFAULT_PINNED;
+    return [];
   }
   try {
     const data: unknown = JSON.parse(readFileSync(file, "utf8"));
@@ -60,8 +54,8 @@ export function loadPinned(file: string, warn: (message: string) => void): Pinne
     for (const item of data) out.push(parseLine(item));
     return out;
   } catch (error) {
-    warn(`${file} is not usable (${error instanceof Error ? error.message : String(error)}); using the defaults`);
-    return DEFAULT_PINNED;
+    warn(`${file} is not usable (${error instanceof Error ? error.message : String(error)}); using an empty list`);
+    return [];
   }
 }
 

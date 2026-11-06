@@ -17,7 +17,7 @@ export type BoardSource = {
   projects: () => unknown;
   /** Every live agent as board-kit's `Agents` part, for `GET /agents` (Motherboard's desks). */
   agents?: () => unknown;
-  /** Where Night Watch's page is, for the "→ Night Watch" links. */
+  /** Where Sentinel's page is, for the "→ Sentinel" links. */
   watchUrl?: string;
 };
 
@@ -56,7 +56,7 @@ export function startServer(port: number, source?: BoardSource): Promise<NightSe
   const server = createServer((req, res) => {
     res.on("error", () => drop(res)); // a page that went away mid-write is simply forgotten
     if (!fromThisComputer(req, actualPort)) {
-      res.writeHead(403, { "content-type": "text/plain" }).end("Night Shift only answers this computer");
+      res.writeHead(403, { "content-type": "text/plain" }).end("Lens only answers this computer");
       return;
     }
     let url: URL;

@@ -104,7 +104,7 @@ function read(line: string): Raw | null {
   }
 }
 
-/** One Claude Code log line → the Night Shift events it means. Never throws: a bad line is reported as skipped. */
+/** One Claude Code log line → the Lens events it means. Never throws: a bad line is reported as skipped. */
 export function parseLine(line: string): ParseResult {
   if (!line.trim()) return { events: [], skipped: 0 };
   const raw = line.length > MAX_LINE ? null : read(line);

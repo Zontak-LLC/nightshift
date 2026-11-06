@@ -5,7 +5,6 @@ import { runInNewContext, Script } from "node:vm";
 import { afterEach, describe, expect, it } from "vitest";
 import { startServer } from "../src/server/index.js";
 import { loadPinned, projectTiles, watchSiteOf } from "../src/store/index.js";
-import { DEFAULT_PINNED } from "../src/store/pinned.js";
 import { localWatchUrl, readState, watchOnBoard, watchOnTile } from "../src/watch/index.js";
 import { boardPage } from "../src/web/index.js";
 import { ageText, WATCH_VIEW, watchStrip } from "../src/web/watch-view.js";
@@ -16,7 +15,7 @@ afterEach(async () => {
   for (const f of cleanup.splice(0)) await f();
 });
 
-describe("a shape Night Watch changed never crashes Night Shift", () => {
+describe("a shape Sentinel changed never crashes Lens", () => {
   it.each([
     null,
     undefined,
@@ -42,27 +41,34 @@ describe("a shape Night Watch changed never crashes Night Shift", () => {
   });
 });
 
-describe("a Night Watch site maps to a Night Shift project", () => {
+describe("a Sentinel site maps to a Lens project", () => {
   const home = "/srv/dev";
-  it("defaults to Loader = magsmith and UseHourly = usehourly", () => {
-    expect(watchSiteOf([], "magsmith", home)).toBe("loader");
-    expect(watchSiteOf([], "usehourly", home)).toBe("usehourly");
-    expect(watchSiteOf([], "nightshift", home)).toBeNull();
+  it("has no built-in site: a project without a watchSite line has no link", () => {
+    expect(watchSiteOf([], "my-app", home)).toBeNull();
+    expect(watchSiteOf([], "demo-app", home)).toBeNull();
+    expect(watchSiteOf([{ path: "~/Projects/my-app", name: "My App" }], "my-app", home)).toBeNull();
+    expect(watchSiteOf([{ path: "~/Projects/my-app", name: "My App", watchSite: "my-site" }], "my-app", home)).toBe(
+      "my-site",
+    );
   });
 
   it("follows projects.json: a watchSite field wins, an empty one turns the link off", () => {
     const pinned = [
       { path: "~/Projects/shop", name: "Shop", watchSite: "store" },
-      { path: "~/Projects/magsmith", name: "Loader", watchSite: "" },
+      { path: "~/Projects/my-app", name: "My App", watchSite: "" },
     ];
     expect(watchSiteOf(pinned, "shop", home)).toBe("store");
-    expect(watchSiteOf(pinned, "magsmith", home)).toBeNull();
+    expect(watchSiteOf(pinned, "my-app", home)).toBeNull();
   });
 
   it("puts the site on the start page tile and on the board payload", () => {
-    const tiles = projectTiles([], DEFAULT_PINNED, { home, nowMs: Date.now() });
-    expect(tiles.find((t) => t.project === "magsmith")?.watchSite).toBe("loader");
-    expect(tiles.find((t) => t.project === "nightshift")?.watchSite).toBeNull();
+    const pinned = [
+      { path: "~/Projects/my-app", name: "My App", watchSite: "loader" },
+      { path: "~/Projects/tools", name: "Tools" },
+    ];
+    const tiles = projectTiles([], pinned, { home, nowMs: Date.now() });
+    expect(tiles.find((t) => t.project === "my-app")?.watchSite).toBe("loader");
+    expect(tiles.find((t) => t.project === "tools")?.watchSite).toBeNull();
     const snap = readState(state([incident({})]));
     const tile = watchOnTile("loader", "up", snap);
     expect(tile).toMatchObject({ siteId: "loader", status: "up", light: "bad", open: 1 });
@@ -84,16 +90,16 @@ describe("a Night Watch site maps to a Night Shift project", () => {
     writeFileSync(
       file,
       JSON.stringify([
-        { path: "~/Projects/magsmith", name: "Loader" },
+        { path: "~/Projects/my-app", name: "My App" },
         { path: "~/Projects/shop", name: "Shop", watchSite: " store " },
-        { path: "~/Projects/usehourly", name: "UseHourly", watchSite: "" },
+        { path: "~/Projects/demo-app", name: "Demo App", watchSite: "" },
       ]),
     );
     const pinned = loadPinned(file, (m) => warnings.push(m));
     expect(warnings).toEqual([]);
-    expect(watchSiteOf(pinned, "magsmith", "/h")).toBe("loader"); // old line: the default
+    expect(watchSiteOf(pinned, "my-app", "/h")).toBeNull(); // old line without watchSite: no default site, no link
     expect(watchSiteOf(pinned, "shop", "/h")).toBe("store");
-    expect(watchSiteOf(pinned, "usehourly", "/h")).toBeNull(); // switched off on purpose
+    expect(watchSiteOf(pinned, "demo-app", "/h")).toBeNull(); // switched off on purpose
   });
 });
 
@@ -102,15 +108,25 @@ describe("the page", () => {
     expect(boardPage()).toContain(".livesite[hidden] { display: none; }");
   });
 
-  it("has a page script that parses, with the Night Watch parts in it", () => {
+  it("has a page script that parses, with the Sentinel parts in it", () => {
     const script = /<script>([\s\S]*)<\/script>/.exec(boardPage())?.[1] ?? "";
     expect(() => new Script(script)).not.toThrow();
-    for (const word of ["renderLive", "renderWatch", "watchLink", "siteLight", "From Night Watch", "Live site"]) {
+    for (const word of [
+      "renderLive",
+      "renderWatch",
+      "watchLink",
+      "siteLight",
+      "From Sentinel",
+      "→ Sentinel",
+      "Live site",
+    ]) {
       expect(script).toContain(word);
     }
+    expect(boardPage()).not.toContain("Night Watch");
+    expect(boardPage()).not.toContain("Night Shift");
   });
 
-  it("is told where Night Watch is, and only the address, nothing that could break the tag", () => {
+  it("is told where Sentinel is, and only the address, nothing that could break the tag", () => {
     expect(boardPage("http://localhost:4500")).toContain(
       '<meta name="nightwatch-url" content="http://localhost:4500">',
     );
@@ -141,7 +157,7 @@ describe("the page", () => {
     const server = await startServer(0, {
       watchUrl: "http://localhost:4500",
       view: (p) => ({ project: p, watch: watchOnBoard("loader", "up", snap) }),
-      projects: () => [{ project: "magsmith", watch: watchOnTile("loader", "up", snap) }],
+      projects: () => [{ project: "my-app", watch: watchOnTile("loader", "up", snap) }],
     });
     cleanup.push(() => server.close());
     const read = async (path: string, kind: string) => {
@@ -152,15 +168,15 @@ describe("the page", () => {
       await reader?.cancel();
       return JSON.parse(text.split("data: ")[1] ?? "null");
     };
-    const board = await read("/events?project=magsmith", "board");
+    const board = await read("/events?project=my-app", "board");
     expect(board.watch.site.open_tickets[0].title).toContain("ECONNREFUSED");
     expect((await read("/events?project=", "projects"))[0].watch).toMatchObject({ light: "bad", open: 1 });
-    const html = await (await fetch(`http://127.0.0.1:${server.port}/magsmith`)).text();
+    const html = await (await fetch(`http://127.0.0.1:${server.port}/my-app`)).text();
     expect(html).toContain('nightwatch-url" content="http://localhost:4500"');
   });
 });
 
-describe("the Night Watch address", () => {
+describe("the Sentinel address", () => {
   it("defaults to port 4500 and only accepts this computer", () => {
     const said: string[] = [];
     expect(localWatchUrl(undefined)).toBe("http://localhost:4500");

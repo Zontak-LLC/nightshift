@@ -1,13 +1,13 @@
-// What a board or a tile receives about Night Watch: plain data the page draws. No site for the project = null.
+// What a board or a tile receives about Sentinel: plain data the page draws. No site for the project = null.
 import type { WatchStatus } from "./client.js";
 import type { Light, SiteView, WatchSnapshot } from "./model.js";
 
 export type WatchOnBoard = {
-  /** The Night Watch site id this project is linked to. */
+  /** The Sentinel site id this project is linked to. */
   siteId: string;
-  /** "up" = the stream is live; anything else = Night Watch is not running (shown as such). */
+  /** "up" = the stream is live; anything else = Sentinel is not running (shown as such). */
   status: WatchStatus;
-  /** The site's state; null when Night Watch is down or does not list this site. */
+  /** The site's state; null when Sentinel is down or does not list this site. */
   site: SiteView | null;
 };
 export type WatchOnTile = {

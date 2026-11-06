@@ -152,7 +152,7 @@ export class Board {
     }
     const t = run.tickets.get(where.number);
     if (!t) return false;
-    // A finished ticket whose steps are read after its result (Night Shift started mid-run): keep only their times.
+    // A finished ticket whose steps are read after its result (Lens started mid-run): keep only their times.
     if (t.station === "done" || t.station === "skipped") return widenTimes(t, e.at);
     t.step = e.summary;
     t.trouble = null; // real work again: the trouble is over
