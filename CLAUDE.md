@@ -1,4 +1,4 @@
-# Night Shift
+# Lens (was Night Shift)
 
 A live screen for Claude Code agents. Read `docs/SPEC.md` (what and why) and `docs/decisions.md` (the decision tree)
 before changing anything; update both in the same commit when a choice changes.
@@ -42,7 +42,7 @@ before changing anything; update both in the same commit when a choice changes.
 - Usage meter: `src/meter.ts` reads `~/.claude/usage-now.json` (`parseMeter`, `startMeter` polls every 30 s; read
   only); the CLI adds it to each board payload as `meter`; `meterView` in `web/shift.ts` (tested, sent to the page)
   makes the segments, levels (amber 75, red 90) and the stale flag (15 min); `server.refresh()` re-pushes every 30 s.
-- Night Watch link: `src/watch/` follows the sister project's `/events` (read only, localhost only, reconnects; `model.ts` reads its state defensively) and `view.ts` builds the board/tile payload; `store/pinned.ts` maps a project to a site (`watchSite`); the page parts are `web/client-watch.ts` and the tested `web/watch-view.ts`. See decisions.md.
+- Sentinel link (Sentinel was Night Watch; identifiers keep the old name): `src/watch/` follows the sister project's `/events` (read only, localhost only, reconnects; `model.ts` reads its state defensively) and `view.ts` builds the board/tile payload; `store/pinned.ts` maps a project to a site (`watchSite`); the page parts are `web/client-watch.ts` and the tested `web/watch-view.ts`. See decisions.md.
 - Desks (issue 15): `GET /agents` returns every live agent (main sessions, background agents, pipeline agents) as
   board-kit's `Agents` part, for Motherboard to pull (read only, same Host check, no CORS). `parser/usage.ts` reads
   `message.model` and `message.usage` into `turn.usage` (the store keeps the last line per `message.id`, so a message

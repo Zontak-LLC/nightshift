@@ -190,7 +190,7 @@ dialog::backdrop { background: rgba(10,11,14,.72); }
 }
 @keyframes roll { from { transform: translateY(-50%); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes tickIn { from { transform: translateY(80%); opacity: 0; } to { transform: none; opacity: 1; } }
-/* Night Watch: the link, the site light, the Live site strip and the From Night Watch lane. */
+/* Sentinel: the link, the site light, the Live site strip and the From Sentinel lane. */
 .nwlink { margin-left: auto; font: 600 12px var(--mono); color: var(--live); text-decoration: none; white-space: nowrap; }
 .nwlink:hover { text-decoration: underline; }
 .sitelight { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); vertical-align: middle; }

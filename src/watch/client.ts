@@ -1,5 +1,5 @@
-// A small client for Night Watch's live stream (`GET /events`, Server-Sent Events). It reconnects with a growing
-// wait, tolerates Night Watch being off, and keeps only the newest snapshot. Read only: it never sends anything.
+// A small client for Sentinel's live stream (`GET /events`, Server-Sent Events). It reconnects with a growing
+// wait, tolerates Sentinel being off, and keeps only the newest snapshot. Read only: it never sends anything.
 import { readState, type WatchSnapshot } from "./model.js";
 
 export const DEFAULT_WATCH_URL = "http://localhost:4500";
@@ -19,7 +19,7 @@ type Options = {
   fetchImpl?: typeof fetch;
 };
 
-/** Night Watch is a local tool: an address that is not this computer is refused (it would be sent nothing, but still). */
+/** Sentinel is a local tool: an address that is not this computer is refused (it would be sent nothing, but still). */
 export function localWatchUrl(raw: string | undefined, warn: (m: string) => void = () => {}): string {
   const text = raw?.trim() || DEFAULT_WATCH_URL;
   try {
@@ -85,7 +85,7 @@ export function startWatchClient(o: Options): WatchClient {
     abort = new AbortController();
     try {
       const res = await doFetch(`${o.url}/events`, { signal: abort.signal, headers: { accept: "text/event-stream" } });
-      if (!res.ok || !res.body) throw new Error(`Night Watch answered ${res.status}`);
+      if (!res.ok || !res.body) throw new Error(`Sentinel answered ${res.status}`);
       await readFrames(res.body, (data) => {
         let next: WatchSnapshot;
         try {
@@ -99,7 +99,7 @@ export function startWatchClient(o: Options): WatchClient {
         o.onChange?.();
       });
     } catch {
-      // Night Watch is off or the connection dropped: fall through to "down" and try again.
+      // Sentinel is off or the connection dropped: fall through to "down" and try again.
     }
     if (stopped) return;
     snap = { sites: {} };

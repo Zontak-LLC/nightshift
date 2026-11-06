@@ -38,17 +38,24 @@ describe("the live stream", () => {
   it("refuses a page that reached it under another name (DNS rebinding)", async () => {
     const server = await startServer(0);
     try {
-      const status = (host: string) =>
-        new Promise<number>((resolve, reject) => {
+      const answer = (host: string) =>
+        new Promise<{ status: number; body: string }>((resolve, reject) => {
           const req = request({ host: "127.0.0.1", port: server.port, path: "/health", headers: { host } }, (res) => {
-            res.resume();
-            resolve(res.statusCode ?? 0);
+            let body = "";
+            res.setEncoding("utf8");
+            res.on("data", (chunk: string) => {
+              body += chunk;
+            });
+            res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));
           });
           req.on("error", reject);
           req.end();
         });
-      expect(await status(`evil.example:${server.port}`)).toBe(403);
-      expect(await status(`localhost:${server.port}`)).toBe(200);
+      expect(await answer(`evil.example:${server.port}`)).toEqual({
+        status: 403,
+        body: "Lens only answers this computer",
+      });
+      expect((await answer(`localhost:${server.port}`)).status).toBe(200);
     } finally {
       await server.close();
     }
@@ -76,7 +83,11 @@ describe("the live stream", () => {
     });
     try {
       const page = await (await fetch(`http://127.0.0.1:${server.port}/demo-app`)).text();
-      expect(page).toContain("<title>Night Shift</title>");
+      expect(page).toContain("<title>Lens</title>");
+      expect(page).toContain("Connecting to Lens…");
+      expect(page).not.toContain("Night Shift");
+      const startPage = await (await fetch(`http://127.0.0.1:${server.port}/`)).text();
+      expect(startPage).toContain("<title>Lens</title>");
       // The page loads nothing from the internet: no script, style, font or image from another host.
       expect(page).not.toMatch(/(?:src|href)=["']?https?:|url\(["']?https?:|@import/);
       const res = await fetch(`http://127.0.0.1:${server.port}/events?project=demo-app`);

@@ -72,7 +72,7 @@ describe("Night Watch goes away and comes back", () => {
     cleanup.push(() => client.stop());
     await until(() => client.status() === "down");
     const down = watchOnBoard("loader", client.status(), client.snapshot());
-    expect(watchStrip(JSON.parse(JSON.stringify(down)))?.headline).toBe("Night Watch: not running");
+    expect(watchStrip(JSON.parse(JSON.stringify(down)))?.headline).toBe("Sentinel: not running");
 
     const nw = await fakeNightWatch(port);
     cleanup.push(() => nw.close());

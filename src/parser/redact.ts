@@ -1,5 +1,5 @@
 /**
- * Night Shift shows commands, searches and replies on a screen, maybe a shared one. Anything that looks like a secret is
+ * Lens shows commands, searches and replies on a screen, maybe a shared one. Anything that looks like a secret is
  * hidden before it is shown: key=value pairs whose name sounds secret, bearer tokens, known key formats, long random
  * strings, and the query string of a URL.
  */

@@ -136,9 +136,14 @@ describe("background agents are filed under the project they really work in", ()
     writeAgents();
     const board = new Board();
     follow(board);
-    // the name comes from the small meta file, read just after the log: wait for both
+    // the name comes from the small meta file, read just after the log, and the main session may be read later
+    // under load: wait for all three
     expect(
-      await until(() => board.view("nightwatch", NOW).agents[0]?.name === "Night Watch: build the dashboard"),
+      await until(
+        () =>
+          board.view("nightwatch", NOW).agents[0]?.name === "Night Watch: build the dashboard" &&
+          board.view("usehourly", NOW).now.length > 0,
+      ),
     ).toBe(true);
 
     const night = board.view("nightwatch", NOW);

@@ -1,10 +1,10 @@
-// What Night Shift shows of Night Watch (the sister project that watches the live sites). Pure functions: they take
-// whatever the stream sent (unknown), keep what is usable, and never throw. Night Watch's shapes may change; a field
+// What Lens shows of Sentinel (the sister project that watches the live sites). Pure functions: they take
+// whatever the stream sent (unknown), keep what is usable, and never throw. Sentinel's shapes may change; a field
 // that is missing or has the wrong type is simply left out.
 
 export type Light = "ok" | "warn" | "bad" | "idle";
 
-/** One Night Watch incident, as a ticket on a project board. */
+/** One Sentinel incident, as a ticket on a project board. */
 export type WatchTicket = {
   id: string;
   title: string;
@@ -15,7 +15,7 @@ export type WatchTicket = {
   resolvedAt: string | null;
   /** The AI's recommended fix, in one line (its summary, else the first step). */
   advice: string | null;
-  /** The title of the GitHub issue draft, when Night Watch made one. */
+  /** The title of the GitHub issue draft, when Sentinel made one. */
   issueTitle: string | null;
   /** "healed by restart the back end" / "cleared by itself", for a resolved one. */
   healedBy: string | null;

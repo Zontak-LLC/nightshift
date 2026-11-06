@@ -10,7 +10,7 @@ const short = (s: string, max = 72): string => {
 /** A path as a person reads it: relative to the session's folder when it is inside it, else just the file name. */
 const showPath = (p: string, cwd: string): string => {
   if (!p) return "";
-  if (!cwd) return basename(p); // without the session's folder, never resolve against Night Shift's own folder
+  if (!cwd) return basename(p); // without the session's folder, never resolve against Lens's own folder
   const rel = relative(cwd, p);
   return rel && !rel.startsWith("..") ? rel : basename(p);
 };

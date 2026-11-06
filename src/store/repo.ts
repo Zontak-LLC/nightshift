@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 const cache = new Map<string, string | null>();
 
-/** "Zontak-LLC/usehourly" from the folder's git remote "origin", or null. Read only, cached per folder. */
+/** "acme/demo-app" from the folder's git remote "origin", or null. Read only, cached per folder. */
 export function repoOf(folder: string): string | null {
   if (cache.has(folder)) return cache.get(folder) ?? null;
   let repo: string | null = null;

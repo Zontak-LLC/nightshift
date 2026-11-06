@@ -1,17 +1,17 @@
 /**
- * The page script's Night Watch part (see client.ts): the "→ Night Watch" link, a project tile's site light, the
- * "Live site" strip and the "From Night Watch" lane. Read only: it only draws and links; nothing here acts on Night Watch.
- * The words come from watch-view.ts (tested). Everything from Night Watch is set with textContent.
+ * The page script's Sentinel part (see client.ts): the "→ Sentinel" link, a project tile's site light, the
+ * "Live site" strip and the "From Sentinel" lane. Read only: it only draws and links; nothing here acts on Sentinel.
+ * The words come from watch-view.ts (tested). Everything from Sentinel is set with textContent.
  */
-export const CLIENT_WATCH = String.raw`  // ---- Night Watch: the link, the site light, the Live site strip and the From Night Watch lane ----
+export const CLIENT_WATCH = String.raw`  // ---- Sentinel: the link, the site light, the Live site strip and the From Sentinel lane ----
   var NW_META = document.querySelector('meta[name="nightwatch-url"]');
   var NW_URL = NW_META ? NW_META.getAttribute("content") || "" : "";
   function nwHref(siteId) { return NW_URL ? NW_URL + "/" + (siteId ? "?site=" + encodeURIComponent(siteId) : "") : ""; }
   function watchLink() {
-    var a = el("a", "nwlink", "→ Night Watch");
+    var a = el("a", "nwlink", "→ Sentinel");
     if (NW_URL) a.href = nwHref("");
     a.hidden = !NW_URL;
-    a.title = "Open Night Watch, the guard that watches the live sites";
+    a.title = "Open Sentinel, the guard that watches the live sites";
     return a;
   }
   function siteLight(w) {
@@ -31,7 +31,7 @@ export const CLIENT_WATCH = String.raw`  // ---- Night Watch: the link, the site
     ui.live.append(el("span", "eyebrow", "Live site"), siteLight(w), el("b", null, s.headline));
     if (s.open) ui.live.append(el("span", "open", s.open));
     if (s.release) ui.live.append(el("span", "rel", s.release));
-    var link = el("a", "nwlink", "→ Night Watch");
+    var link = el("a", "nwlink", "→ Sentinel");
     if (NW_URL) link.href = nwHref(w.siteId);
     link.hidden = !NW_URL;
     ui.live.append(link);
@@ -55,7 +55,7 @@ export const CLIENT_WATCH = String.raw`  // ---- Night Watch: the link, the site
     ui.fromwatch.hidden = !open.length && !done.length;
     ui.fromwatch.textContent = "";
     if (ui.fromwatch.hidden) return;
-    var h = el("h2", null, "From Night Watch");
+    var h = el("h2", null, "From Sentinel");
     h.append(el("span", "count", String(open.length)));
     ui.fromwatch.append(h);
     var grid = el("div", "wgrid");

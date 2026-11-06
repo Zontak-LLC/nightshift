@@ -21,8 +21,8 @@ export const CLIENT_END = String.raw`  // ---- the usage meters in the header: 1
 
   function renderTop(view) {
     renderMeters(view.meter);
-    document.title = "Night Shift · " + (view.name || view.project);
-    ui.title.textContent = "Night Shift · " + (view.name || view.project);
+    document.title = "Lens · " + (view.name || view.project);
+    ui.title.textContent = "Lens · " + (view.name || view.project);
     ui.where.textContent = [view.repo, view.folder, view.branch].filter(Boolean).join(" · ");
     var run = view.run, tot = run ? shiftTotals(run.columns) : null;
     ui.stats.done.value.textContent = tot ? tot.done + " / " + tot.total : "–";
@@ -114,7 +114,7 @@ export const CLIENT_END = String.raw`  // ---- the usage meters in the header: 1
     var stick = ui.blocks.scrollHeight - ui.blocks.scrollTop - ui.blocks.clientHeight < 80;
     ui.blocks.textContent = "";
     var banner = el("div", "banner");
-    banner.append(el("b", null, "Night Shift"), " · " + view.project + (view.branch ? " · " + view.branch : ""));
+    banner.append(el("b", null, "Lens")," · " + view.project + (view.branch ? " · " + view.branch : ""));
     ui.blocks.append(banner);
     live.forEach(function (t) {
       (t.recent || []).forEach(function (s, i, all) {

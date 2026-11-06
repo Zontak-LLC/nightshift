@@ -1,5 +1,5 @@
 /**
- * Night Shift's own events: what one Claude Code log line means, in a small, stable shape the rest of the app uses.
+ * Lens's own events: what one Claude Code log line means, in a small, stable shape the rest of the app uses.
  * The raw log format belongs to Claude Code and can change; only the parser knows it.
  */
 /** `agentId` is set on steps a subagent took (a workflow's ticket agent), so its steps can be told from the main thread's. */

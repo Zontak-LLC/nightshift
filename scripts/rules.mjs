@@ -11,7 +11,7 @@ const LINE_RULES = [
   { name: "no eval / new Function", test: (l) => /\beval\(|new Function\(/.test(l) },
 ];
 
-// Night Shift only reads Claude Code's files. Writing to disk, or starting other programs, happens in the store only.
+// Lens only reads Claude Code's files. Writing to disk, or starting other programs, happens in the store only.
 // File-system writes only. `res.write()` on a network response is not a disk write, so a bare `write(`/`rm(` counts
 // only when it is not a method call (imported from node:fs); `fs.`, `fsp.` and `promises.` calls always count, and so
 // does `open(...)` with a write flag. Known gap: an aliased import (`rm as remove`) or a FileHandle's `.write(`.

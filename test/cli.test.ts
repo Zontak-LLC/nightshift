@@ -1,20 +1,35 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { parseArgs, usage } from "../src/usage.js";
+import { parseArgs, startBanner, usage } from "../src/usage.js";
 
 // Runs the real command with the same Node that runs the tests (no npx, no network, works on Windows too).
 const run = (...args: string[]) =>
   spawnSync(process.execPath, ["--import", "tsx", "src/cli.ts", ...args], { encoding: "utf8" });
 
-// Scenario: a developer who just installed Night Shift asks it what it is.
+// Scenario: a developer who just installed Lens asks it what it is.
 describe("a developer runs nightshift for the first time", () => {
   it("explains what it does, how to use it, and that nothing leaves the computer", () => {
     const { stdout, status } = run("--help");
     expect(status).toBe(0);
-    expect(stdout).toMatch(/^Night Shift \d+\.\d+\.\d+/);
+    expect(stdout).toMatch(/^Lens \d+\.\d+\.\d+/);
     expect(stdout).toContain("Claude Code agents");
     expect(stdout).toContain("-v, --version");
-    expect(stdout).toContain("Nothing leaves your computer.");
+    expect(stdout).toContain("Lens only reads Claude Code's log files. Nothing leaves your computer.");
+    expect(stdout).not.toContain("Night Shift");
+  });
+
+  it("says Lens, what it watches and where the board is when it starts", () => {
+    const text = startBanner({
+      version: "1.2.3",
+      root: "~/.claude/projects",
+      db: "~/.nightshift/nightshift.db",
+      keepDays: 30,
+      port: 4400,
+    });
+    expect(text.startsWith("Lens 1.2.3 · watching ~/.claude/projects\n")).toBe(true);
+    expect(text).toContain("History: ~/.nightshift/nightshift.db (30 days)");
+    expect(text).toContain("Board: http://localhost:4400/");
+    expect(text).toContain("Desks: http://localhost:4400/agents");
   });
 
   it("prints just the version for --version", () => {
@@ -49,6 +64,6 @@ describe("reading the command line", () => {
   });
 
   it("names the version in the help", () => {
-    expect(usage("1.2.3").split("\n")[0]).toBe("Night Shift 1.2.3");
+    expect(usage("1.2.3").split("\n")[0]).toBe("Lens 1.2.3");
   });
 });

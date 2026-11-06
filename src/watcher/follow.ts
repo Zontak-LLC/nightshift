@@ -97,7 +97,7 @@ async function logFiles(root: string): Promise<LogFile[] | null> {
 /** The bytes from `from` to `to`; fewer when the file shrank meanwhile (never zero padding). */
 async function readRange(path: string, from: number, to: number): Promise<Buffer> {
   if (to <= from) return Buffer.alloc(0);
-  const handle = await open(path, "r"); // read only: Night Shift never writes to Claude Code's files
+  const handle = await open(path, "r"); // read only: Lens never writes to Claude Code's files
   try {
     const buf = Buffer.alloc(to - from);
     const { bytesRead } = await handle.read(buf, 0, buf.length, from);

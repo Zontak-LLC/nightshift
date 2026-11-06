@@ -199,3 +199,19 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
 - **A pipeline's helpers get desks too.** An agent whose journal label has no ticket number (e.g. "rank open tickets")
   is in `run.helpers`, not on a ticket, and is never a background agent. It is a pipeline desk with its label as title
   and no `ticket`; its steps and times come from its own lines (`DeskLog`), because the board keeps only its latest step.
+
+## Lens: ready for strangers (2026-11-06)
+
+- **The rename is words only.** Night Shift is now Lens and Night Watch is Sentinel on screen, in the terminal, in the
+  README and in the doc comments a reader sees first. Identifiers, file names, the folder, the repo, the `nightshift`
+  command, `~/.nightshift`, `nightshift.db` and the `NIGHTSHIFT_*` settings keep the old name: renaming them is a
+  separate decision (it breaks installs and links).
+- **Empty defaults.** A new install pins nothing (`projects.json` is created as `[]`, a damaged one falls back to `[]`)
+  and there is no built-in Sentinel site: a project links to a site only through its line's `watchSite`. Recent repos
+  under `~/Projects` and busy projects still show by themselves. The old defaults named our own projects, which a
+  stranger does not have.
+- **Our list lives in our own `projects.json`.** `scripts/fill-watch-sites.mjs <file> <folder=site>...` adds the
+  `watchSite` that the old built-in sites gave (backup first, never drops or reorders a line, a second run changes
+  nothing); the names are typed on the command line only, never committed.
+- **Sentinel is named without a link** while its repo is private: a link would be a 404 for strangers.
+  `test/readme.test.ts` guards the README (check-rules does not scan it). Add the link when that repo is public.

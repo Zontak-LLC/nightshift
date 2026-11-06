@@ -36,7 +36,7 @@ export const CLIENT_START = String.raw`
   function renderProjects(rows) {
     root.textContent = "";
     var head = el("header", "top"), brand = el("div", "brand");
-    brand.append(el("span", "led"), el("h1", null, "Night Shift"));
+    brand.append(el("span", "led"), el("h1", null, "Lens"));
     head.append(brand, watchLink());
     root.append(head);
     if (!rows.length) { root.append(el("p", "empty", "No projects yet. Add one to ~/.nightshift/projects.json.")); return; }
@@ -58,7 +58,7 @@ export const CLIENT_START = String.raw`
   function build() {
     root.textContent = "";
     var head = el("header", "top"), brand = el("div", "brand"), name = el("div");
-    ui.title = el("h1", null, "Night Shift · " + project);
+    ui.title = el("h1", null, "Lens · " + project);
     ui.where = el("div", "where");
     name.append(ui.title, ui.where);
     brand.append(el("span", "led"), name);
@@ -132,7 +132,7 @@ export const CLIENT_START = String.raw`
     ui.agents.setAttribute("aria-label", "Background agents");
     ui.agents.hidden = true;
     ui.fromwatch = el("section", "fromwatch");
-    ui.fromwatch.setAttribute("aria-label", "From Night Watch");
+    ui.fromwatch.setAttribute("aria-label", "From Sentinel");
     ui.fromwatch.hidden = true;
     ui.panels.board.append(floor, ui.fromwatch, ui.agents);
     buildTerminal(ui.panels.terminal);

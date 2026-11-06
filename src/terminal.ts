@@ -2,7 +2,7 @@ import { basename } from "node:path";
 import type { NightEvent } from "./parser/index.js";
 
 /**
- * The terminal view of the live stream (ticket 3's visible win): one short line per step, "usehourly  Editing x.ts".
+ * The terminal view of the live stream (ticket 3's visible win): one short line per step, "demo-app  Editing x.ts".
  * Pure: it remembers each session's project from its "session.seen" event and returns the line to print, or null.
  * Claude Code writes a session's title and pull-request link into the log again from time to time, so each is printed
  * only when it is new for that session.
