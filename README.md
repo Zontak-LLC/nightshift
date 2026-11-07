@@ -108,7 +108,7 @@ stays at home). Idle projects stay on the start page, dimmer.
 
 ```bash
 nohup npm start > /tmp/lens.log 2>&1 &    # start (from this folder, after npm run build)
-curl -s localhost:4400/health              # {"ok":true}
+curl -s localhost:4400/health              # {"ok":true,"status":"ok","lastLineAt":"…"}; 503 "stale" when it fell behind
 pkill -f "dist/cli.js"                     # stop (it saves its place and closes the file)
 ```
 

@@ -17,6 +17,8 @@ export type BoardSource = {
   projects: () => unknown;
   /** Every live agent as board-kit's `Agents` part, for `GET /agents` (Motherboard's desks). */
   agents?: () => unknown;
+  /** Is Lens keeping up with the logs? `ok: false` answers `/health` with 503 (a monitor sees it at once). */
+  health?: () => { ok: boolean };
   /** Where Sentinel's page is, for the "→ Sentinel" links. */
   watchUrl?: string;
 };
@@ -36,8 +38,16 @@ function fromThisComputer(req: IncomingMessage, port: number): boolean {
   return host === `127.0.0.1:${port}` || host === `localhost:${port}`;
 }
 
+/** 200 while the logs are being read, 503 when Lens has fallen behind them (the body says since when). */
+function answerHealth(res: ServerResponse, source: BoardSource | undefined): void {
+  const health = source?.health ? source.health() : { ok: true };
+  res
+    .writeHead(health.ok ? 200 : 503, { "content-type": "application/json", "cache-control": "no-store" })
+    .end(JSON.stringify(health));
+}
+
 /**
- * The local server: `/events` streams every new event to the open pages (Server-Sent Events), `/health` answers ok,
+ * The local server: `/events` streams every new event to the open pages (Server-Sent Events), `/health` says whether the logs are being read (503 when stale),
  * `/agents` returns the live agents as JSON for Motherboard.
  * It listens on 127.0.0.1 only and answers only requests addressed to this computer. No CORS headers on purpose.
  */
@@ -82,7 +92,7 @@ export function startServer(port: number, source?: BoardSource): Promise<NightSe
       return;
     }
     if (url.pathname === "/health") {
-      res.writeHead(200, { "content-type": "application/json" }).end('{"ok":true}');
+      answerHealth(res, source);
       return;
     }
     if (url.pathname === "/agents" && source?.agents) {

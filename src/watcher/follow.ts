@@ -1,7 +1,7 @@
 import type { Stats } from "node:fs";
-import { open, readdir, readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { open, readFile, stat } from "node:fs/promises";
 import { type NightEvent, parseAgentMeta, parseJournalLine, parseLine, type RunEvent } from "../parser/index.js";
+import { type LogFile, logFiles } from "./files.js";
 import { advance, committed, START, startAt, type TailState } from "./tail.js";
 
 /** Where an event came from: a key that is the same every time the same line is read, so a store can tell a repeat. */
@@ -26,8 +26,14 @@ export type WatchOptions = {
   /** A file was read up to `offset` (the end of its last whole line): remember it. Called after its events. */
   onRead?: (path: string, mark: FileMark) => void;
   onSkipped?: (count: number) => void;
-  /** A problem that did not stop the watcher (an unreadable folder, a failing `onEvent`). */
+  /** Whole lines were read (any lines, events or not): the watcher is alive and keeping up. */
+  onLines?: (count: number) => void;
+  /** A problem that did not stop the watcher (an unreadable folder or file, a failing `onEvent`, a stuck look). */
   onError?: (error: unknown) => void;
+  /** At most this many bytes of one file per look: a huge log is caught up over several looks, never read whole. */
+  chunkBytes?: number;
+  /** A file whose read has not come back after this long is reported and passed over until it does. */
+  stuckMs?: number;
 };
 
 type Followed = { tail: TailState; ino: number; epoch: number };
@@ -42,58 +48,6 @@ type Read = {
   mark: FileMark | null;
 };
 
-type LogFile = {
-  path: string;
-  journal: { runId: string; sessionId: string } | null;
-  /** A background agent's `agent-<id>.meta.json`: a small JSON file with the description it was started with. */
-  meta?: { sessionId: string; agentId: string };
-};
-
-const jsonl = async (dir: string): Promise<string[]> =>
-  (await readdir(dir).catch(() => [])).filter((f) => f.endsWith(".jsonl")).map((f) => join(dir, f));
-
-/** The workflows of one session: each run's journal FIRST (so its agents are known), then the agents' own logs. */
-async function workflowLogs(sessionDir: string, sessionId: string): Promise<LogFile[]> {
-  const out: LogFile[] = [];
-  const workflows = join(sessionDir, "subagents", "workflows");
-  for (const runId of await readdir(workflows).catch(() => [])) {
-    const files = await jsonl(join(workflows, runId));
-    const journal = files.find((f) => f.endsWith("journal.jsonl"));
-    if (journal) out.push({ path: journal, journal: { runId, sessionId } });
-    for (const f of files) if (f !== journal) out.push({ path: f, journal: null });
-  }
-  return out;
-}
-
-/** One session folder's logs: its workflows, its background agents' logs and their `.meta.json` descriptions. */
-async function sessionLogs(path: string, sessionId: string): Promise<LogFile[]> {
-  const out = await workflowLogs(path, sessionId);
-  const subagents = join(path, "subagents");
-  for (const f of await jsonl(subagents)) out.push({ path: f, journal: null });
-  for (const f of await readdir(subagents).catch(() => [])) {
-    const agentId = /^agent-(.+)\.meta\.json$/.exec(f)?.[1];
-    if (agentId) out.push({ path: join(subagents, f), journal: null, meta: { sessionId, agentId } });
-  }
-  return out;
-}
-
-/** Every log under `root`, or null when `root` does not exist (yet). Session folders hold their agents' logs. */
-async function logFiles(root: string): Promise<LogFile[] | null> {
-  const projects = await readdir(root, { withFileTypes: true }).catch(() => null);
-  if (!projects) return null;
-  const out: LogFile[] = [];
-  for (const project of projects) {
-    if (!project.isDirectory()) continue;
-    const dir = join(root, project.name);
-    for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
-      const path = join(dir, entry.name);
-      if (entry.isFile() && entry.name.endsWith(".jsonl")) out.push({ path, journal: null });
-      else if (entry.isDirectory()) out.push(...(await sessionLogs(path, entry.name)));
-    }
-  }
-  return out;
-}
-
 /** The bytes from `from` to `to`; fewer when the file shrank meanwhile (never zero padding). */
 async function readRange(path: string, from: number, to: number): Promise<Buffer> {
   if (to <= from) return Buffer.alloc(0);
@@ -104,6 +58,19 @@ async function readRange(path: string, from: number, to: number): Promise<Buffer
     return buf.subarray(0, bytesRead);
   } finally {
     await handle.close();
+  }
+}
+
+/** True when `work` settles within `ms`; false when it is still pending then (it carries on in the background). */
+async function finishedWithin(work: Promise<void>, ms: number): Promise<boolean> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<boolean>((done) => {
+    timer = setTimeout(() => done(false), ms);
+  });
+  try {
+    return await Promise.race([work.then(() => true), late]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -120,6 +87,9 @@ export function watchLogs(opts: WatchOptions): () => void {
     onError,
     resume,
     onRead,
+    onLines,
+    chunkBytes = 8_000_000,
+    stuckMs = 120_000,
   } = opts;
   const files = new Map<string, Followed>();
   /** meta file -> the size last read (it is written once, then left alone). */
@@ -127,6 +97,16 @@ export function watchLogs(opts: WatchOptions): () => void {
   let first = true;
   let busy = false;
   let stopped = false;
+  /** Files whose read has not come back after `stuckMs`: passed over until it does, so the others go on. */
+  const hung = new Set<string>();
+  /** File and folder problems are said once each: the same unreadable file must not fill the log every second. */
+  const said = new Set<string>();
+  function reportOnce(where: string, error: unknown): void {
+    const message = `${where}: ${error instanceof Error ? error.message : String(error)}`;
+    if (said.has(message)) return;
+    said.add(message);
+    onError?.(new Error(message));
+  }
 
   function firstTail(size: number, mtimeMs: number): TailState {
     if (!first) return START; // a file that appears later is brand new: read it all
@@ -189,7 +169,17 @@ export function watchLogs(opts: WatchOptions): () => void {
     const known = files.get(path) ?? remembered(path, info.ino, info.size);
     if (known && known.ino === info.ino && info.size === known.tail.offset) return null;
     const { tail, epoch } = placeFor(known, info, Boolean(journal));
-    const chunk = await readRange(path, tail.offset, info.size).catch(() => Buffer.alloc(0));
+    const to = Math.min(info.size, tail.offset + chunkBytes);
+    const chunk = await readRange(path, tail.offset, to).catch((error: unknown) => {
+      reportOnce(path, error); // and try again on the next look
+      return null;
+    });
+    // Keep the place chosen even when the read failed: a retry must not start the file over from its top.
+    if (!chunk) {
+      files.set(path, { tail, ino: info.ino, epoch });
+      return null;
+    }
+    for (const message of said) if (message.startsWith(`${path}: `)) said.delete(message); // it reads again
     const step = advance(tail, chunk);
     files.set(path, { tail: step.state, ino: info.ino, epoch });
     const mark = step.state.skipping ? null : { ino: info.ino, epoch, offset: committed(step.state) };
@@ -211,19 +201,33 @@ export function watchLogs(opts: WatchOptions): () => void {
   async function follow(file: LogFile): Promise<void> {
     const read = await newLines(file);
     if (!read) return;
+    if (read.lines.length) safely(() => onLines?.(read.lines.length));
     emit(read, file.journal);
     const mark = read.mark;
     if (mark && !stopped) safely(() => onRead?.(read.path, mark));
+  }
+
+  /** One file at a time. A file that fails is reported and skipped; one whose read never comes back (a blocked
+   * read, a pipe) is reported and passed over after `stuckMs`, so one file can never stop every other one. */
+  async function look(file: LogFile): Promise<void> {
+    if (hung.has(file.path)) return;
+    const work = (file.meta ? readMeta({ ...file, meta: file.meta }) : follow(file)).catch((error: unknown) =>
+      reportOnce(file.path, error),
+    );
+    if (await finishedWithin(work, stuckMs)) return;
+    hung.add(file.path);
+    reportOnce(file.path, new Error(`no answer after ${Math.round(stuckMs / 1000)} s; reading the other files`));
+    void work.finally(() => hung.delete(file.path));
   }
 
   async function tick(): Promise<void> {
     if (busy || stopped) return;
     busy = true;
     try {
-      const paths = await logFiles(root);
+      const paths = logFiles(root, (error) => reportOnce(root, error));
       for (const file of paths ?? []) {
-        if (file.meta) await readMeta({ ...file, meta: file.meta });
-        else await follow(file);
+        if (stopped) return;
+        await look(file);
       }
       if (paths) first = false; // a folder that appears later is new work: read it all
     } finally {

@@ -200,6 +200,26 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
   is in `run.helpers`, not on a ticket, and is never a background agent. It is a pipeline desk with its label as title
   and no `ticket`; its steps and times come from its own lines (`DeskLog`), because the board keeps only its latest step.
 
+## Honest health (2026-11-07)
+
+- **Why.** Lens ran from 2026-11-01 20:25 and stopped reading at 23:49 the same night; for five days the board said
+  "last active Nov 1" and `/health` said ok. The process was alive (timers ran, the meter was fresh), used no CPU and
+  held no log file open, and reported no error. A fresh copy on the same logs and history read the 125 MB backlog of
+  the 171 MB session at once, so the big file did not cause it by itself; the look loop simply never ran again. The
+  exact stuck call was not caught (attaching a debugger to the live process was not allowed).
+- **Stale = work nobody read.** `/health` is stale (HTTP 503) when no whole line was read for 30 minutes (since the
+  start, before the first line) AND a `.jsonl` under the root changed in those 30 minutes. A quiet computer is never
+  stale. The body gives `lastLineAt` and `lastChangeAt` (ISO) so a monitor can say since when.
+- **The probe does not trust the watcher.** It lists and stats the logs with SYNC calls on the request (a few hundred
+  stats, milliseconds), so a stuck background read cannot also hang the health answer. The watcher's listing uses the
+  same sync code (`watcher/files.ts`); only file reads stay async.
+- **No file can stop the others.** A file's read that has not come back after `stuckMs` (2 min) is reported once and
+  passed over until it does; a file that fails is reported once (not every second) and retried; at most `chunkBytes`
+  (8 MB) of one file are read per look, so a huge backlog is caught up over several looks and never held whole.
+  A file that failed keeps the place chosen for it, so a retry never reads its old history as new.
+- **Known limit.** Stale is about Lens as a whole: while one session is read, one other unreadable or stuck log does
+  not make `/health` stale (it is reported once in the error log instead). A per-file check can come later if needed.
+
 ## Lens: ready for strangers (2026-11-06)
 
 - **The rename is words only.** Night Shift is now Lens and Night Watch is Sentinel on screen, in the terminal, in the
