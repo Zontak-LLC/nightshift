@@ -117,13 +117,14 @@ Claude Code log files ──► Watcher ──► Parser ──► Event store (
 
 The board never looks busy while nothing happens. The NOW strip turns amber and says it in words, with the next step:
 
-| What happens                         | What the board says                                                                                      |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| Usage limit                          | "Paused: usage limit since 21:40 · resets 22:40 (in 58 min). Nothing is lost; work continues by itself." |
-| Connection lost, computer slept      | "Waiting on Claude: connection trouble since 21:40."                                                     |
-| Login expired                        | "Logged out: run /login in Claude Code since 21:40."                                                     |
-| A ticket with no step for 30 minutes | "Quiet since 21:40" on its card                                                                          |
-| The page loses Night Shift           | The status light turns amber: "RECONNECTING…"                                                            |
+| What happens                         | What the board says                                                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Usage limit                          | "Paused: usage limit since 21:40 · resets 22:40 (in 58 min). Nothing is lost; work continues by itself."                  |
+| Connection lost, computer slept      | "Waiting on Claude: connection trouble since 21:40."                                                                      |
+| Login expired                        | "Logged out: run /login in Claude Code since 21:40."                                                                      |
+| A ticket with no step for 30 minutes | "Quiet since 21:40" on its card                                                                                           |
+| The page loses Night Shift           | The status light turns amber: "RECONNECTING…"                                                                             |
+| Lens itself stops reading the logs   | `GET /health` answers 503 `{"ok":false,"status":"stale","lastLineAt":…}`: no line read for 30 minutes while a log changed |
 
 A paused ticket says so on its card. Each notice clears by itself at the next real step.
 
@@ -182,6 +183,7 @@ Claude writes most of the code; these keep it from drifting into a mess on a lon
 
 ## 13. Change log
 
+- 1.0 (2026-11-07): `/health` tells the truth: the time of the last line read, and "stale" (503) when no line was read for 30 minutes while logs changed. A quiet computer is not stale. The watcher reads a huge log a slice at a time and never lets one unreadable or stuck file stop the others.
 - 0.9 (2026-10-24): the link to Night Watch (read only): a Live site strip, a From Night Watch lane of incidents on the board of a watched project, a site light on its start page tile, and a `→ Night Watch` link (decision in decisions.md).
 - 0.8 (2026-10-24): a session shows on every repository it works in (steps split by where they work), and the start page lists a fixed project list from `~/.nightshift/projects.json` (idle ones dimmer), plus recently used repos under `~/Projects`.
 - 0.7 (2026-10-24): background agents (subagents) are followed and filed under the project they really work in (section 5b, scenario 11).

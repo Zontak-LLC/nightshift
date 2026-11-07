@@ -1,7 +1,7 @@
 // The engine: the watcher feeding the history and the board. The CLI adds the server and the terminal on top.
 import type { NightEvent, RunEvent } from "./parser/index.js";
 import { Board, DEFAULT_KEEP_DAYS, History } from "./store/index.js";
-import { watchLogs } from "./watcher/index.js";
+import { type Health, healthOf, newestChange, watchLogs } from "./watcher/index.js";
 
 export type EngineOptions = {
   /** Claude Code's projects folder. */
@@ -10,11 +10,19 @@ export type EngineOptions = {
   dbPath: string;
   keepDays?: number;
   everyMs?: number;
+  /** No line read for this long while logs changed = stale (default 30 minutes). */
+  staleMs?: number;
   /** A new event (never one seen before, never one replayed from the history). */
   onNew?: (event: NightEvent | RunEvent) => void;
   onError?: (error: unknown) => void;
 };
-export type Engine = { board: Board; history: History; stop: () => void };
+export type Engine = {
+  board: Board;
+  history: History;
+  /** For `/health`: when a line was last read, and whether Lens has fallen behind the logs. */
+  health: (nowMs?: number) => Health;
+  stop: () => void;
+};
 
 const HOUR_MS = 3_600_000;
 
@@ -23,7 +31,9 @@ const HOUR_MS = 3_600_000;
  * that cannot be opened (damaged, no rights) is reported and the board runs without a history rather than not at all.
  */
 export function startEngine(options: EngineOptions): Engine {
-  const { root, dbPath, keepDays = DEFAULT_KEEP_DAYS, everyMs, onNew, onError } = options;
+  const { root, dbPath, keepDays = DEFAULT_KEEP_DAYS, everyMs, staleMs, onNew, onError } = options;
+  const startedMs = Date.now();
+  let lastLineMs: number | null = null;
   let history: History;
   try {
     history = new History(dbPath);
@@ -48,6 +58,9 @@ export function startEngine(options: EngineOptions): Engine {
     onRun: (event, origin) => take(event, origin.key),
     resume: (path) => history.file(path),
     onRead: (path, mark) => history.saveFile(path, mark),
+    onLines: () => {
+      lastLineMs = Date.now();
+    },
     ...(onError ? { onError } : {}),
   });
   const pruner = setInterval(() => history.prune(keepDays), HOUR_MS);
@@ -55,6 +68,8 @@ export function startEngine(options: EngineOptions): Engine {
   return {
     board,
     history,
+    health: (nowMs = Date.now()) =>
+      healthOf({ startedMs, lastLineMs, newestChangeMs: newestChange(root), nowMs, ...(staleMs ? { staleMs } : {}) }),
     stop: () => {
       stopWatching();
       clearInterval(pruner);
