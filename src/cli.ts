@@ -11,6 +11,7 @@ import { DEFAULT_KEEP_DAYS, expand, loadPinned, projectTiles, repoOf, watchSiteO
 import { terminalPrinter } from "./terminal.js";
 import { parseArgs, startBanner, usage } from "./usage.js";
 import { localWatchUrl, startWatchClient, watchOnBoard, watchOnTile } from "./watch/index.js";
+import { watchdog } from "./watcher/index.js";
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
 const command = parseArgs(process.argv.slice(2));
@@ -81,15 +82,26 @@ async function start(): Promise<void> {
   console.info(
     startBanner({ version: pkg.version, root, db: join(dataDir, "nightshift.db"), keepDays, port: server.port }),
   );
-  const quit = async () => {
+  const quit = async (code = 0) => {
+    stopWatchdog();
     engine.stop();
     meter.stop();
     watch.stop();
-    await server.close();
-    process.exit(0);
+    await Promise.race([server.close(), new Promise((r) => setTimeout(r, 5_000))]); // a stuck Lens must still exit
+    process.exit(code);
   };
-  process.on("SIGINT", quit);
-  process.on("SIGTERM", quit);
+  // A Lens that stopped reading cannot heal itself: say so and exit 1, and the service starts a fresh one.
+  const stopWatchdog = watchdog(
+    () => engine.health(),
+    (health) => {
+      console.error(
+        `nightshift: no line read since ${health.lastLineAt ?? "the start"} while logs changed (${health.lastChangeAt}); exiting so the service starts Lens again`,
+      );
+      void quit(1);
+    },
+  );
+  process.on("SIGINT", () => void quit());
+  process.on("SIGTERM", () => void quit());
 }
 
 if (command.kind === "version") console.info(pkg.version);

@@ -12,7 +12,8 @@ before changing anything; update both in the same commit when a choice changes.
   On start, files quiet for 10 minutes are followed from their end (old history is not "now"); recent ones are read
   (the last 256 KB of a big one); a file that appears later is read from its start. `files.ts` lists the logs (sync,
   so it always returns); at most 8 MB of one file per look; a file that fails is reported once, one whose read has
-  not come back in 2 min is passed over until it does. `health.ts`: stale = no line read for 30 min while a log changed.
+  not come back in 2 min is passed over until it does. `health.ts`: stale = no line read for 30 min while a log changed; its `watchdog` makes the CLI exit 1 on the first
+  stale check (every minute), so the service starts a fresh Lens (stuck reads hold all of Node's file threads).
 - `src/store/`: the board (state from events) and `history.ts`, the SQLite history (`node:sqlite`): every event under a
   key `<file>#<inode>.<epoch>@<line end>.<n>` (`INSERT OR IGNORE`, so a line read twice is stored once and not
   applied twice), plus each file's saved offset. The ONLY place that writes to disk. `src/engine.ts` wires it: replay

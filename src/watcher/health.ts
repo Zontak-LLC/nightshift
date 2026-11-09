@@ -29,3 +29,24 @@ export function healthOf({ startedMs, lastLineMs, newestChangeMs, nowMs, staleMs
   const stale = nowMs - quietSince > staleMs && newestChangeMs !== null && newestChangeMs > nowMs - staleMs;
   return { ok: !stale, status: stale ? "stale" : "ok", lastLineAt: iso(lastLineMs), lastChangeAt: iso(newestChangeMs) };
 }
+
+export const WATCHDOG_EVERY_MS = 60_000;
+
+/**
+ * Looks at `check()` every `everyMs` and calls `onStale` once when it says stale. Lens froze twice (2026-11-01 and
+ * 2026-11-07) with every file read stuck: Node's 4 file threads were all held by reads that never came back, so later
+ * reads only waited in line. /health said "stale" for two days and nobody acted. Only a new process clears that,
+ * so the CLI exits on `onStale` and the service (launchd KeepAlive) starts a fresh Lens.
+ */
+export function watchdog(check: () => Health, onStale: (health: Health) => void, everyMs = WATCHDOG_EVERY_MS) {
+  let fired = false;
+  const timer = setInterval(() => {
+    if (fired) return;
+    const health = check();
+    if (health.ok) return;
+    fired = true;
+    onStale(health);
+  }, everyMs);
+  timer.unref();
+  return () => clearInterval(timer);
+}
