@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { startEngine } from "../src/engine.js";
 import type { NightEvent } from "../src/parser/index.js";
 import { startServer } from "../src/server/index.js";
-import { healthOf, watchLogs } from "../src/watcher/index.js";
+import { type Health, healthOf, watchdog, watchLogs } from "../src/watcher/index.js";
 
 const line = (o: Record<string, unknown>) =>
   `${JSON.stringify({ sessionId: "s1", cwd: "/work/demo-app", gitBranch: "main", timestamp: "2026-11-01T23:49:00.000Z", ...o })}\n`;
@@ -191,5 +191,57 @@ describe("/health tells the truth", () => {
       lastLineAt: new Date(now - 671 * min).toISOString(),
       lastChangeAt: new Date(now - 2 * min).toISOString(),
     });
+  });
+});
+
+// Lens froze again on 2026-11-07: /health said "stale" for two days, and the board sat on top with nothing new.
+describe("a stale Lens is restarted, not left frozen", () => {
+  it("calls for a restart once when lines stop coming while a session keeps writing", async () => {
+    const project = setup();
+    const log = join(project, "s1.jsonl");
+    const engine = startEngine({ root: dir, dbPath: ":memory:", everyMs: 10, staleMs: 300 });
+    stops.push(engine.stop);
+    writeFileSync(log, toolUse("t1", "a.ts"));
+    expect(await until(() => engine.health().lastLineAt !== null)).toBe(true);
+    const fired: Health[] = [];
+    stops.push(
+      watchdog(
+        () => engine.health(),
+        (h) => fired.push(h),
+        20,
+      ),
+    );
+    chmodSync(log, 0o200); // Lens can no longer read the log, but the session goes on writing
+    for (let i = 0; i < 10; i++) {
+      appendFileSync(log, toolUse(`t${i + 2}`, "b.ts"));
+      await wait(60);
+    }
+    await wait(100);
+    expect(fired).toHaveLength(1); // once: the CLI exits on the first call, it is never asked twice
+    expect(fired[0]).toMatchObject({ ok: false, status: "stale", lastLineAt: engine.health().lastLineAt });
+    chmodSync(log, 0o600);
+  });
+
+  it("never calls on a computer that is simply quiet, nor while lines keep coming", async () => {
+    const project = setup();
+    const log = join(project, "s1.jsonl");
+    writeFileSync(log, toolUse("t1", "a.ts"));
+    const engine = startEngine({ root: dir, dbPath: ":memory:", everyMs: 10, staleMs: 200 });
+    stops.push(engine.stop);
+    const fired: Health[] = [];
+    stops.push(
+      watchdog(
+        () => engine.health(),
+        (h) => fired.push(h),
+        20,
+      ),
+    );
+    for (let i = 0; i < 6; i++) {
+      appendFileSync(log, toolUse(`t${i + 2}`, "c.ts")); // a working session, read as it goes
+      await wait(60);
+    }
+    await wait(400); // then nobody types anything
+    expect(engine.health().lastLineAt).not.toBeNull();
+    expect(fired).toEqual([]);
   });
 });

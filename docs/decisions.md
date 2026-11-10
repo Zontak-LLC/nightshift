@@ -200,6 +200,19 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
   is in `run.helpers`, not on a ticket, and is never a background agent. It is a pipeline desk with its label as title
   and no `ticket`; its steps and times come from its own lines (`DeskLog`), because the board keeps only its latest step.
 
+## A stale Lens restarts itself (2026-11-09)
+
+- **Why.** Lens froze again: it read its last line on 2026-11-07 at 16:20 and `/health` said "stale" for two days.
+  The error log showed every file, the newest sessions too, as "no answer after 120 s". Node reads files on a pool of
+  4 threads; reads that never come back hold all 4, so every later read only waits in line. Passing a stuck file over
+  (below) frees nothing. A restart read everything at once. The first stuck read was not caught this time either.
+- **The fix is a new process.** The CLI checks `engine.health()` every minute (`watchdog` in `watcher/health.ts`).
+  On the first "stale" it writes one line to the error log (since when, last change), closes, and exits 1; the
+  service (launchd `KeepAlive`, `com.zontak.lens`) starts a fresh Lens, which carries on from the saved offsets.
+  Stale needs 30 minutes of changes with no line read, so a quiet computer never restarts. The close waits at most
+  5 s for the server, so a stuck Lens still exits. Run by hand (no service), Lens just stops with that message.
+- **Not chosen.** A bigger thread pool (`UV_THREADPOOL_SIZE`) only delays the same jam.
+
 ## Honest health (2026-11-07)
 
 - **Why.** Lens ran from 2026-11-01 20:25 and stopped reading at 23:49 the same night; for five days the board said
