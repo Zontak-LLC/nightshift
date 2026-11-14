@@ -1,9 +1,8 @@
 import { basename } from "node:path";
 import type { NightEvent } from "../parser/index.js";
-import type { Helper, Run, Session, Ticket } from "./board.js";
-import type { RootOf } from "./root.js";
+import { type Parts, partsOf, type Source } from "./desk-parts.js";
 import { type Trouble, troubleFrom } from "./trouble.js";
-import { KEEP_MS, QUIET_MS, type Workers } from "./workers.js";
+import { KEEP_MS, QUIET_MS } from "./workers.js";
 
 /**
  * Desks: one per live agent on this computer (main sessions, background agents, pipeline agents), served read only at
@@ -36,7 +35,7 @@ export type DeskTokens = { total: number; input: number; output: number; cacheRe
 
 type UsageEvent = Extract<NightEvent, { kind: "turn.usage" }>;
 /** What the board keeps nowhere else, per main session (`main:<id>`) and per agent (`agent:<id>`). */
-type Mark = {
+export type Mark = {
   model: string | null;
   tokens: DeskTokens | null;
   /** What each message id counts for: a later line of it, or a log read again from the top, replaces its count. */
@@ -127,23 +126,7 @@ export class DeskLog {
   }
 }
 
-type Parts = {
-  id: string;
-  role: string;
-  title: string;
-  /** A pipeline's ticket number. */
-  ticket: string | null;
-  folder: string;
-  steps: number;
-  recent: string[];
-  startedAt: string | null;
-  lastAt: string;
-  /** Not finished (a session has no end marker; an agent's turn ended; a ticket got its result). */
-  working: boolean;
-  trouble: Trouble | null;
-  mark: Mark | undefined;
-};
-type Seated = { desk: Desk; lastAt: string };
+export type Seated = { desk: Desk; lastAt: string };
 
 /** The board's words for why it stopped; the steps are the one place the contract has for them. */
 const stopLine = (t: Trouble) => (t.resetsAt ? `${t.reason}, resets ${t.resetsAt}` : t.reason);
@@ -182,117 +165,26 @@ function deskOf(p: Parts, nowMs: number, hideHome: (text: string) => string): Se
   return { desk, lastAt: p.lastAt };
 }
 
-/** Where a pipeline agent works. A quiet session log is followed from its end, so its session can be unknown. */
-function pipelineFolder(session: Session | undefined, mark: Mark | undefined, src: Source): string {
-  const cwd = mark?.cwd ?? "";
-  return session?.home ?? src.rootOf(cwd)?.root ?? cwd;
-}
-
-function ticketParts(t: Ticket & { agentId: string }, session: Session | undefined, src: Source): Parts {
-  const mark = src.log.get(`agent:${t.agentId}`);
-  const own = mark?.lastAt ?? "";
-  const working = t.station === "working" || t.station === "checking";
-  return {
-    id: `agent:${t.agentId}`,
-    role: "pipeline agent",
-    title: t.title,
-    ticket: `#${t.number}`,
-    folder: pipelineFolder(session, mark, src),
-    recent: t.recent,
-    steps: t.steps,
-    startedAt: t.startedAt ?? mark?.startedAt ?? null,
-    // Its own newest line, never the run's: another ticket's steps must not keep a stalled agent active.
-    lastAt: t.finishedAt && t.finishedAt > own ? t.finishedAt : own,
-    working,
-    trouble: working ? (t.trouble ?? session?.trouble ?? null) : t.trouble,
-    mark,
-  };
-}
-
-/** A pipeline agent with no ticket (a label with no number): the board keeps only its latest step, so its mark counts. */
-function helperParts(agentId: string, h: Helper, session: Session | undefined, src: Source): Parts {
-  const mark = src.log.get(`agent:${agentId}`);
-  return {
-    id: `agent:${agentId}`,
-    role: "pipeline agent",
-    title: h.label,
-    ticket: null,
-    folder: pipelineFolder(session, mark, src),
-    recent: mark?.recent ?? [],
-    steps: mark?.steps ?? 0,
-    startedAt: mark?.startedAt ?? null,
-    lastAt: mark?.lastAt ?? "",
-    working: h.active,
-    trouble: h.active ? (mark?.trouble ?? session?.trouble ?? null) : null,
-    mark,
-  };
-}
-
-type Source = {
-  sessions: Map<string, Session>;
-  runs: Map<string, Run>;
-  workers: Workers;
-  log: DeskLog;
-  /** The home folder, shown as `~` in what goes out. */
-  home: string;
-  /** The repository of a folder, so a worktree shows as its repo (cached: no disk read per pull). */
-  rootOf: RootOf;
-  /** Agents a pipeline started: they are pipeline desks, never background ones. */
-  isPipeline: (agentId: string) => boolean;
-};
-
-/** Every live desk: waiting for the owner first, then the active ones, then the newest; at most 50. */
-export function desksOf(src: Source, nowMs: number): DesksView {
-  const parts: Parts[] = [];
-  for (const [id, s] of src.sessions) {
-    const mark = src.log.get(`main:${id}`);
-    parts.push({
-      id: `main:${id}`,
-      role: "main session",
-      title: s.title ?? "Session",
-      ticket: null,
-      folder: s.home,
-      recent: mark?.recent ?? [],
-      steps: mark?.steps ?? 0,
-      startedAt: mark?.startedAt ?? null,
-      lastAt: s.lastAt,
-      working: true, // a main session has no end marker: quiet for 10 minutes = idle
-      trouble: s.trouble,
-      mark,
-    });
-  }
-  for (const { w, place } of src.workers.live(nowMs, src.isPipeline)) {
-    const mark = src.log.get(`agent:${w.agentId}`);
-    parts.push({
-      id: `agent:${w.agentId}`,
-      role: "background agent",
-      // Never `w.task`: that is the start of the agent's prompt, and prompts stay off this endpoint.
-      title: w.title ?? `agent ${w.agentId.slice(0, 6)}`,
-      ticket: null,
-      folder: src.rootOf(place.folder)?.root ?? place.folder,
-      recent: w.recent,
-      steps: w.steps,
-      startedAt: w.startedAt,
-      lastAt: w.lastAt,
-      working: !w.ended,
-      // Its session's trouble stops only the work in progress: an agent that finished is not held up by it.
-      trouble: mark?.trouble ?? (w.ended ? null : (src.sessions.get(w.parent)?.trouble ?? null)),
-      mark,
-    });
-  }
-  for (const run of src.runs.values()) {
-    const session = src.sessions.get(run.sessionId);
-    for (const t of run.tickets.values())
-      if (t.agentId) parts.push(ticketParts({ ...t, agentId: t.agentId }, session, src));
-    for (const [agentId, h] of run.helpers) parts.push(helperParts(agentId, h, session, src));
-  }
+/** Every live desk: waiting for the owner first, then the active ones, then the newest. The whole list, uncut. */
+export function seatedOf(src: Source, nowMs: number): Seated[] {
   const hideHome = homeHider(src.home);
-  const seated = parts.map((p) => deskOf(p, nowMs, hideHome)).filter((s) => s !== null);
+  const seated = partsOf(src, nowMs)
+    .map((p) => deskOf(p, nowMs, hideHome))
+    .filter((s) => s !== null);
   seated.sort(
     (a, b) =>
       Number(b.desk.state === "waits") - Number(a.desk.state === "waits") ||
       Number(b.desk.state === "working") - Number(a.desk.state === "working") ||
       b.lastAt.localeCompare(a.lastAt),
   );
-  return { list: seated.slice(0, SHOWN).map((s) => s.desk) };
+  return seated;
+}
+
+/** Every live desk in `seatedOf`'s order; at most 50. */
+export function desksOf(src: Source, nowMs: number): DesksView {
+  return {
+    list: seatedOf(src, nowMs)
+      .slice(0, SHOWN)
+      .map((s) => s.desk),
+  };
 }

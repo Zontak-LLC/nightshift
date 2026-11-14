@@ -50,10 +50,13 @@ before changing anything; update both in the same commit when a choice changes.
 - Desks (issue 15): `GET /agents` returns every live agent (main sessions, background agents, pipeline agents) as
   board-kit's `Agents` part, for Motherboard to pull (read only, same Host check, no CORS). `parser/usage.ts` reads
   `message.model` and `message.usage` into `turn.usage` (the store keeps the last line per `message.id`, so a message
-  split over lines counts once); `store/desks.ts` (`DeskLog`, `desksOf`, the only file that knows the contract) adds
+  split over lines counts once); `store/desks.ts` (`DeskLog`, `desksOf`, the only file that knows board-kit's contract) adds
   tokens per agent, open `AskUserQuestion` calls and trouble. `Desk`/`DesksView` are board-kit's `Agent`/`Agents` at
   commit 0c60024 (copies in `test/fixtures/`), so only its keys go out: `costUsd` is always null, and tokens stay in the
   store (`Board.deskTokens`) until the contract has a field for them. See decisions.md.
+  `GET /api/agents` is Forge's Agents tile (issue 14; Forge was Day Shift, identifiers keep the old name):
+  `store/day-shift.ts` is the only file that knows Forge's contract, and `store/desk-parts.ts` builds the Parts both
+  routes are made from.
 - `src/cli.ts` wires them together (`src/terminal.ts` is the terminal view: one line per step, titles and pull
   requests printed once per session, local time); `test/` holds the scenario tests and `test/fixtures/` real-shaped sample logs.
 

@@ -1,0 +1,26 @@
+Copied from Zontak-LLC/nightshift issue #14 ("Serve GET /api/agents for Day Shift's Agents tile"). Reference only; the contract wins.
+
+## The contract
+
+`GET /api/agents` answers JSON:
+
+```json
+{
+  "agents": [
+    { "role": "watcher", "worksOn": "usehourly logs", "startedAt": "2026-10-25T03:10:00Z", "limitMinutes": 30 },
+    { "role": "fixer", "worksOn": "loader incident 12", "startedAt": "2026-10-25T03:20:00Z", "limitMinutes": null }
+  ]
+}
+```
+
+- `role`, `worksOn`: non-empty text, at most 200 characters each.
+- `startedAt`: an ISO date (when the agent last showed progress), or `null`.
+- `limitMinutes`: a whole number from 1 to 600, or `null`. Day Shift shows an agent as stuck once it has run longer than this, or longer than 15 minutes when it is `null`. With no `startedAt` it is never stuck.
+- Only running agents are listed. An empty list means "nothing running".
+- Any other shape, an HTTP error, a reply over 64 KB or no reply within 3 s counts as "not connected" on Day Shift's side. Day Shift keeps at most 20 agents.
+
+## How Day Shift reads it
+
+- Day Shift's config gets an optional `nightShiftUrl` (for example `http://127.0.0.1:4400`). Without it nothing is read.
+- Day Shift reads it read only, in the background: on start and every 30 s, never once per page load. A good reply is kept for 2 minutes.
+- `role` and `worksOn` go through Day Shift's secret redaction and are shown as text, never as HTML. Night Shift should still never put secrets in them.

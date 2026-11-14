@@ -2,7 +2,8 @@ import { homedir } from "node:os";
 import { basename } from "node:path";
 import { type NightEvent, type RunEvent, titleInLabel } from "../parser/index.js";
 import { columnsOf, newRun, newTicket, widenTimes } from "./columns.js";
-import { DeskLog, type DesksView, type DeskTokens, desksOf } from "./desks.js";
+import { type DayShiftAgents, runningAgents } from "./day-shift.js";
+import { DeskLog, type DesksView, type DeskTokens, desksOf, seatedOf } from "./desks.js";
 import { type NowRow, nowRows, placeStep, type Spot } from "./places.js";
 import { type RootOf, repoRootOf } from "./root.js";
 import { type Alert, alertsOf, pauseTicket, type Trouble, troubleFrom } from "./trouble.js";
@@ -231,9 +232,7 @@ export class Board {
       for (const run of this.runs.values()) {
         if (run.sessionId !== id) continue;
         own.lastAt = later(own.lastAt, run.lastAt);
-        own.running += [...run.tickets.values()].filter(
-          (t) => t.station === "working" || t.station === "checking",
-        ).length;
+        own.running += [...run.tickets.values()].filter((t) => ["working", "checking"].includes(t.station)).length;
       }
       for (const [project, spot] of s.places) {
         const r = row(project, spot.folder);
@@ -255,8 +254,17 @@ export class Board {
 
   /** One desk per live agent on this computer, for Motherboard's Agents tab (`GET /agents`, see desks.ts). */
   desks(nowMs = Date.now(), home = homedir()): DesksView {
+    return desksOf(this.deskSource(home), nowMs);
+  }
+
+  /** The running agents, for Forge's Agents tile (`GET /api/agents`, see day-shift.ts). */
+  running(nowMs = Date.now(), home = homedir()): DayShiftAgents {
+    return runningAgents(seatedOf(this.deskSource(home), nowMs));
+  }
+
+  private deskSource(home: string) {
     const { sessions, runs, workers, log, rootOf } = this;
-    return desksOf({ sessions, runs, workers, log, home, rootOf, isPipeline: (id) => this.agents.has(id) }, nowMs);
+    return { sessions, runs, workers, log, home, rootOf, isPipeline: (id: string) => this.agents.has(id) };
   }
 
   /** A desk's tokens, null when unknown: kept here until board-kit's `Agent` has a field for them. */
@@ -273,26 +281,17 @@ export class Board {
     const newest = own[0]?.[1];
     const agents = this.workers.rows(project, nowMs, (id) => this.agents.has(id));
     const run = this.runOf(new Set(own.map(([id]) => id))); // pipelines stay with the project they started in
-    const alerts = alertsOf(
-      mine.map(([, s]) => s),
-      run?.tickets.values() ?? [],
-    );
-    const now = nowRows(
-      mine.map(([, s]) => s),
-      run,
-      project,
-    );
+    const sessions = mine.map(([, s]) => s);
+    const folder = newest?.cwd ?? mine[0]?.[1].places.get(project)?.folder;
     return {
       project,
-      folder:
-        newest?.cwd ??
-        mine[0]?.[1].places.get(project)?.folder ??
-        this.workers.projects(nowMs).get(project)?.folder ??
-        null,
+      folder: folder ?? this.workers.projects(nowMs).get(project)?.folder ?? null,
       branch: newest?.branch ?? null,
-      now: now.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6),
+      now: nowRows(sessions, run, project)
+        .sort((a, b) => b.at.localeCompare(a.at))
+        .slice(0, 6),
       agents,
-      alerts,
+      alerts: alertsOf(sessions, run?.tickets.values() ?? []),
       run: run && { runId: run.runId, startedAt: run.startedAt, lastAt: run.lastAt, columns: columnsOf(run) },
     };
   }

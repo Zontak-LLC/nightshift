@@ -200,6 +200,27 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
   is in `run.helpers`, not on a ticket, and is never a background agent. It is a pipeline desk with its label as title
   and no `ticket`; its steps and times come from its own lines (`DeskLog`), because the board keeps only its latest step.
 
+## Forge's Agents tile (issue 14, 2026-11-13)
+
+Forge was Day Shift; the identifiers (`store/day-shift.ts`, `DayShiftAgents`) and the copied issue keep the old name.
+- **A second route, not a second shape on `/agents`.** Forge defined its own contract (`role`, `worksOn`,
+  `startedAt`, `limitMinutes`; copied to `test/fixtures/day-shift-agents-contract.txt`), which differs from board-kit's
+  `Agents`. So `GET /api/agents` serves it and `/agents` stays exactly as it was. `store/day-shift.ts` is the only file
+  that knows Forge's contract; both routes are built from the same desks (`seatedOf` in `store/desks.ts`, the Parts
+  from `store/desk-parts.ts`), so there is one liveness rule.
+- **Running = `working` or `waits`.** Idle desks (quiet for 10 minutes, or finished) drop off, and are dropped before
+  the cut to 20, from the full uncut list (not `/agents`' 50), so they never push a running one out. Order is the
+  desks' order: waiting first, then working, then newest.
+- **Stuck limit** (decided by the owner, 2026-11-13): `limitMinutes` is 30 for pipeline agents, because long checks
+  like `npm run ci` are normal; null for main sessions and background agents, so Forge's 15 minutes apply. A
+  constant (`PIPELINE_LIMIT_MINUTES`), not a setting.
+- **A working desk goes idle after 10 quiet minutes and leaves the list,** so Forge's time-based "stuck" only shows
+  for waiting agents and for pipeline agents (30 min). That is today's liveness rule, kept as it is.
+- **What goes out.** Only the four keys. `startedAt` is the agent's own newest line (when it last showed progress).
+  `worksOn` is built from the desk's repo, ticket and title (the home folder already shown as `~`): single spaces, cut
+  to 200 characters last, `agent` if empty. Titles, never prompts or a background agent's task. Forge redacts too,
+  but a secret typed into a session title would still go out.
+
 ## A stale Lens restarts itself (2026-11-09)
 
 - **Why.** Lens froze again: it read its last line on 2026-11-07 at 16:20 and `/health` said "stale" for two days.

@@ -92,6 +92,12 @@ Claude Code log files ──► Watcher ──► Parser ──► Event store (
   ticket, repo, model, current step and the two before it, step count, run time and `state` (`waits` = "waits for
   you"). Read only (other methods get 405), `cache-control: no-store`, this computer only (Host check), no CORS. No
   dollar cost: `costUsd` is null. Tokens are kept per agent, but the contract has no field for them yet (decisions.md).
+- **Forge's Agents tile:** `GET /api/agents` (`http://127.0.0.1:4400/api/agents`) returns only the running agents
+  (working or waiting) in Forge's shape (issue 14): `{ "agents": [ { role, worksOn, startedAt, limitMinutes } ] }`,
+  at most 20, waiting first. `worksOn` is `<repo>: <ticket> <title>` (single spaces, at most 200 characters, home folder
+  as `~`); `startedAt` the agent's newest line; `limitMinutes` 30 for a pipeline agent, null otherwise (Forge's
+  15). Same rules as `/agents`: GET only (405), `no-store`, no CORS, and only a Host of `127.0.0.1` or `localhost`
+  with the port is answered (any other, e.g. a container name or a LAN address, gets 403).
 - **Page:** plain TypeScript and CSS (no framework needed for v1), drawn from the state plus the stream.
 - **Layers only point one way:** page → stream → store → parser. The page never reads files; the parser never touches the database. An architecture test enforces it.
 
