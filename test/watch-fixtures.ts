@@ -39,7 +39,14 @@ export const state = (incidents: unknown[], over: Record<string, unknown> = {}) 
   ...over,
 });
 
-export type Fake = { port: number; send: (data: unknown) => void; dropAll: () => void; close: () => Promise<void> };
+export type Fake = {
+  port: number;
+  /** How many clients hold the stream open now. Tests wait for one instead of sleeping, so a busy machine drops no frame. */
+  listeners: () => number;
+  send: (data: unknown) => void;
+  dropAll: () => void;
+  close: () => Promise<void>;
+};
 export async function fakeNightWatch(port = 0): Promise<Fake> {
   const open = new Set<ServerResponse>();
   const server: Server = createServer((req, res) => {
@@ -52,6 +59,7 @@ export async function fakeNightWatch(port = 0): Promise<Fake> {
   await new Promise<void>((r) => server.listen(port, "127.0.0.1", r));
   return {
     port: (server.address() as AddressInfo).port,
+    listeners: () => open.size,
     send: (data) => {
       for (const r of open) r.write(`event: state\ndata: ${JSON.stringify(data)}\n\n`);
     },
