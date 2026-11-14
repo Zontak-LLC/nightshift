@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { parseArgs, startBanner, usage } from "../src/usage.js";
+import { OLD_NAMES } from "./old-names.js";
 
 // Runs the real command with the same Node that runs the tests (no npx, no network, works on Windows too).
 const run = (...args: string[]) =>
@@ -15,7 +16,7 @@ describe("a developer runs nightshift for the first time", () => {
     expect(stdout).toContain("Claude Code agents");
     expect(stdout).toContain("-v, --version");
     expect(stdout).toContain("Lens only reads Claude Code's log files. Nothing leaves your computer.");
-    expect(stdout).not.toContain("Night Shift");
+    for (const old of OLD_NAMES) expect(stdout).not.toContain(old);
   });
 
   it("says Lens, what it watches and where the board is when it starts", () => {

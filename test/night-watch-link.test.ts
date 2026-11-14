@@ -14,7 +14,7 @@ describe("Night Watch's incidents become tickets on the project board", () => {
     cleanup.push(() => nw.close());
     const client = startWatchClient({ url: `http://127.0.0.1:${nw.port}`, firstWaitMs: 20 });
     cleanup.push(() => client.stop());
-    await new Promise((r) => setTimeout(r, 60));
+    await until(() => nw.listeners() > 0);
     nw.send(state([incident({})]));
     await until(() => client.status() === "up" && !!client.snapshot().sites.loader);
 
@@ -77,7 +77,7 @@ describe("Night Watch goes away and comes back", () => {
     const nw = await fakeNightWatch(port);
     cleanup.push(() => nw.close());
     await until(() => nw.port === port);
-    await new Promise((r) => setTimeout(r, 120)); // let it reconnect
+    await until(() => nw.listeners() > 0); // it reconnected
     nw.send(state([incident({})]));
     await until(() => client.status() === "up" && client.snapshot().sites.loader?.open === 1);
   });
@@ -87,13 +87,13 @@ describe("Night Watch goes away and comes back", () => {
     cleanup.push(() => nw.close());
     const client = startWatchClient({ url: `http://127.0.0.1:${nw.port}`, firstWaitMs: 20, maxWaitMs: 40 });
     cleanup.push(() => client.stop());
-    await new Promise((r) => setTimeout(r, 60));
+    await until(() => nw.listeners() > 0);
     nw.send(state([incident({})]));
     await until(() => client.status() === "up");
     nw.dropAll();
     await until(() => client.status() === "down");
     expect(client.snapshot().sites).toEqual({}); // old news is not shown as live
-    await new Promise((r) => setTimeout(r, 120));
+    await until(() => nw.listeners() > 0); // it reconnected
     nw.send(state([incident({ id: "i9" })]));
     await until(() => client.snapshot().sites.loader?.open_tickets[0]?.id === "i9");
     expect(client.status()).toBe("up");
@@ -104,7 +104,7 @@ describe("Night Watch goes away and comes back", () => {
     cleanup.push(() => nw.close());
     const client = startWatchClient({ url: `http://127.0.0.1:${nw.port}`, firstWaitMs: 20 });
     cleanup.push(() => client.stop());
-    await new Promise((r) => setTimeout(r, 60));
+    await until(() => nw.listeners() > 0);
     nw.send("not an object");
     nw.send(state([incident({})]));
     await until(() => client.snapshot().sites.loader?.open === 1);

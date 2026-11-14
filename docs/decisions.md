@@ -1,4 +1,4 @@
-# Night Shift: the decision tree
+# Lens: the decision tree
 
 Every choice that shapes the project, as a tree: a question, the branch taken, why, and what it ruled out. A branch
 marked **OPEN** waits for an answer; answering it can change the branches under it. Claude adds a node whenever a choice
@@ -28,10 +28,10 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
 
 - **Version 1: Claude Code logs only, read only** (2026-10-23).
   - Later: GitHub pull requests and CI runs (version 2).
-- **Version 2: Night run**, Night Shift starts the work itself (2026-10-23, the owner). **Default: all night until the
+- **Version 2: Night run**, Lens starts the work itself (2026-10-23, the owner). **Default: all night until the
   queue is done.** Optional `ticketLimit` (5, 10, ...) for accounts with usage limits, then "Start next batch". Reaching a
   usage limit pauses, never fails, and resumes without redoing finished tickets.
-  - **OPEN: in version 1 instead?** Recommended no: watching must be reliable before Night Shift starts anything.
+  - **OPEN: in version 1 instead?** Recommended no: watching must be reliable before Lens starts anything.
 
 ## Language and tools (Rule 1)
 
@@ -41,7 +41,7 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
   - **History = the event log (ticket 6, 2026-10-24).** The board is built from events alone, so the file stores the events
     (idempotent by file + inode + epoch + line end) and each file's offset; sessions, background agents, steps and
     tickets are rebuilt by replay, not kept in tables of their own that could drift from the events. Retention removes
-    whole sessions quiet for 30 days (`NIGHTSHIFT_KEEP_DAYS`). If the file cannot be opened, Night Shift runs without
+    whole sessions quiet for 30 days (`NIGHTSHIFT_KEEP_DAYS`). If the file cannot be opened, Lens runs without
     history and says so.
 - **A local web page**, plain TypeScript and CSS, no framework for v1. Runner-up: a menu-bar app (later stretch).
 
@@ -126,40 +126,40 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
   stays at home. **Pipelines (workflow runs) stay with the project the session started in**: their tickets are not
   split (a run is one unit).
 - **A fixed project list on the start page** (`store/pinned.ts`). `~/.nightshift/projects.json` is a list of
-  `{ path, name }`; it is created with four defaults when missing (Loader = `~/Projects/magsmith`, UseHourly, Night
-  Watch, Night Shift). Pinned projects show even when idle (dimmer, after the busy ones, kept in file order). Other
+  `{ path, name }`; it is created with four defaults when missing (Loader = `~/Projects/magsmith`, UseHourly,
+  Sentinel, Lens). Pinned projects show even when idle (dimmer, after the busy ones, kept in file order). Other
   git repositories directly under `~/Projects` with Claude activity in the last 30 days are added by themselves, and
   any other project that is busy right now stays visible. To remove an auto-added repo, add
   `{ "path": "~/Projects/x", "hide": true }` to the file (the file is never rewritten after it exists).
   The display name is for people (tile and board title); the board address keeps the folder name (`/magsmith`).
   Each tile shows the last active time (from the history), agents and tickets working, and the open tickets of the
   newest pipeline run. "Busy" = a working ticket or agent, or a step in the last 10 minutes.
-- **A damaged file never stops Night Shift:** invalid JSON, not a list, or a line without a `path` means the defaults
+- **A damaged file never stops Lens:** invalid JSON, not a list, or a line without a `path` means the defaults
   are used and one line is printed in the log (`projects.json is not usable ... using the defaults`). The file is read
   again on every push, so an edit shows without a restart. Ruled out: a settings screen (SPEC section 3.7).
 - **Limits (said plainly):** a project is its folder name, so two repositories with the same folder name share one board
   and one tile (as for agents). A session that started in a worktree or a subfolder belongs to its main repository.
   A usage-limit pause shows on every repository the session touched.
 
-- **The link to Night Watch** (`src/watch/`). Night Shift is the workshop, Night Watch the guard; they meet at the
-  release: Night Watch finds a problem, an issue is opened, Night Shift's agents fix it, the release goes out, Night
-  Watch watches again. Night Shift only READS: `startWatchClient` follows Night Watch's `GET /events` (the `state`
-  event) with `fetch`, backs off 1 s doubling to 30 s, drops old news when the stream drops, and shows "Night Watch: not
+- **The link to Sentinel** (`src/watch/`). Lens is the workshop, Sentinel the guard; they meet at the
+  release: Sentinel finds a problem, an issue is opened, Lens's agents fix it, the release goes out, Sentinel
+  watches again. Lens only READS: `startWatchClient` follows Sentinel's `GET /events` (the `state`
+  event) with `fetch`, backs off 1 s doubling to 30 s, drops old news when the stream drops, and shows "Sentinel: not
   running". The address (`NIGHTSHIFT_NIGHTWATCH_URL`, default `http://localhost:4500`) must be this computer; anything
   else is ignored with one warning. `watch/model.ts` reads the state defensively (a field of the wrong type is left out,
-  nothing throws), because Night Watch is another project whose shapes may change.
+  nothing throws), because Sentinel is another project whose shapes may change.
   - **Site to project:** `watchSite` on a line of `projects.json` (`""` = none); default `magsmith` = `loader`,
-    `usehourly` = `usehourly`. A site Night Watch does not list shows a plain note.
+    `usehourly` = `usehourly`. A site Sentinel does not list shows a plain note.
   - **Light** = the worst tile level of the site (problem = red, warn = amber, ok = green); tiles that are idle (not
     connected yet) do not count against it. **Release** = the Deploys tile (its figure, age and reason).
   - **Incidents as tickets** are a lane under the line, not a sixth station, because they have no ticket number and do
     not move left to right. Open ones (any severity, colour by severity) and the five newest resolved ones. The advice is
-    the fix Night Watch proposes, else the first triage step. "Healed by" needs a fix attempt with the verdict "healed".
-  - Ruled out: buttons that act on Night Watch (resolve, retriage, open an issue). Those stay in Night Watch.
+    the fix Sentinel proposes, else the first triage step. "Healed by" needs a fix attempt with the verdict "healed".
+  - Ruled out: buttons that act on Sentinel (resolve, retriage, open an issue). Those stay in Sentinel.
 
 ## Motherboard's Desks (issue 15, 2026-10-29)
 
-- **Pull, not push.** Motherboard reads `GET /agents`; Night Shift never sends anything anywhere. It is the same
+- **Pull, not push.** Motherboard reads `GET /agents`; Lens never sends anything anywhere. It is the same
   pattern as the rest of the server (127.0.0.1 only, the Host check against DNS rebinding) and needs no address,
   token or retry logic on our side. A stream (SSE) can come later if a pull every few seconds is not enough.
 - **No CORS on purpose.** The payload lists what every agent is doing. Without CORS headers no page on another origin
@@ -239,6 +239,9 @@ is made, in the same commit as the change. Rule 1 applies to every node: the rig
   README and in the doc comments a reader sees first. Identifiers, file names, the folder, the repo, the `nightshift`
   command, `~/.nightshift`, `nightshift.db` and the `NIGHTSHIFT_*` settings keep the old name: renaming them is a
   separate decision (it breaks installs and links).
+- **The owner's names (2026-10-27):** Day Shift -> Forge, Night Shift -> Lens, Night Watch -> Sentinel (Motherboard
+  stays). Only words a person reads change; identifiers keep the old names. This entry is the only doc that holds the
+  old-to-new mapping; `test/old-names.ts` lists the old names and the tests keep them off the screens and docs.
 - **Empty defaults.** A new install pins nothing (`projects.json` is created as `[]`, a damaged one falls back to `[]`)
   and there is no built-in Sentinel site: a project links to a site only through its line's `watchSite`. Recent repos
   under `~/Projects` and busy projects still show by themselves. The old defaults named our own projects, which a

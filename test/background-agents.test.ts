@@ -171,7 +171,10 @@ describe("background agents are filed under the project they really work in", ()
     writeAgents();
     const board = new Board();
     follow(board);
-    expect(await until(() => board.projects(NOW).some((p) => p.project === "nightwatch"))).toBe(true);
+    // Wait for both projects: the files are read in no fixed order, so one can show up before the other.
+    const shown = (name: string, agents: number) =>
+      board.projects(NOW).some((p) => p.project === name && p.agents === agents);
+    expect(await until(() => shown("nightwatch", 1) && shown("usehourly", 2))).toBe(true);
     const rows = Object.fromEntries(board.projects(NOW).map((p) => [p.project, p]));
     expect(rows.nightwatch).toMatchObject({ folder: repos.nightwatch, agents: 1, running: 0 });
     expect(rows.usehourly).toMatchObject({ agents: 2 });

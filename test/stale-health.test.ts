@@ -151,6 +151,8 @@ describe("/health tells the truth", () => {
       appendFileSync(log, toolUse(`t${i + 2}`, "b.ts"));
       await wait(60);
     }
+    // A busy machine (the full suite) can see the last change a little late: wait for it, then ask /health.
+    expect(await until(() => !engine.health().ok)).toBe(true);
     const res = await fetch(`http://127.0.0.1:${server.port}/health`);
     expect(res.status).toBe(503);
     const body = (await res.json()) as Record<string, unknown>;
@@ -216,6 +218,7 @@ describe("a stale Lens is restarted, not left frozen", () => {
       appendFileSync(log, toolUse(`t${i + 2}`, "b.ts"));
       await wait(60);
     }
+    expect(await until(() => fired.length > 0)).toBe(true);
     await wait(100);
     expect(fired).toHaveLength(1); // once: the CLI exits on the first call, it is never asked twice
     expect(fired[0]).toMatchObject({ ok: false, status: "stale", lastLineAt: engine.health().lastLineAt });
@@ -226,8 +229,10 @@ describe("a stale Lens is restarted, not left frozen", () => {
     const project = setup();
     const log = join(project, "s1.jsonl");
     writeFileSync(log, toolUse("t1", "a.ts"));
-    const engine = startEngine({ root: dir, dbPath: ":memory:", everyMs: 10, staleMs: 200 });
+    // 600 ms, not less: under the full suite a busy machine can take a few hundred ms between two reads.
+    const engine = startEngine({ root: dir, dbPath: ":memory:", everyMs: 10, staleMs: 600 });
     stops.push(engine.stop);
+    expect(await until(() => engine.health().lastLineAt !== null)).toBe(true);
     const fired: Health[] = [];
     stops.push(
       watchdog(
@@ -240,7 +245,7 @@ describe("a stale Lens is restarted, not left frozen", () => {
       appendFileSync(log, toolUse(`t${i + 2}`, "c.ts")); // a working session, read as it goes
       await wait(60);
     }
-    await wait(400); // then nobody types anything
+    await wait(900); // then nobody types anything, for longer than the stale window
     expect(engine.health().lastLineAt).not.toBeNull();
     expect(fired).toEqual([]);
   });
