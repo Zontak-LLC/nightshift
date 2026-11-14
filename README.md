@@ -4,7 +4,7 @@ A live screen for your Claude Code agents: what they are doing right now, and wh
 
 ![The Lens board for a demo project: the NOW strip, the pipeline's tickets by station, and the background agents](docs/screenshot.png)
 
-> Status: works day to day: Board, Terminal and Timeline tabs, usage meter, Sentinel link, `GET /agents`. Not on npm
+> Status: works day to day: Board, Terminal and Timeline tabs, usage meter, Sentinel link, `GET /agents`, `GET /api/agents`. Not on npm
 > yet. See [docs/SPEC.md](docs/SPEC.md).
 
 ## Install and run

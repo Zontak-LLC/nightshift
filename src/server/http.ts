@@ -17,6 +17,8 @@ export type BoardSource = {
   projects: () => unknown;
   /** Every live agent as board-kit's `Agents` part, for `GET /agents` (Motherboard's desks). */
   agents?: () => unknown;
+  /** The running agents in Forge's shape, for `GET /api/agents` (Forge's Agents tile). */
+  running?: () => unknown;
   /** Is Lens keeping up with the logs? `ok: false` answers `/health` with 503 (a monitor sees it at once). */
   health?: () => { ok: boolean };
   /** Where Sentinel's page is, for the "→ Sentinel" links. */
@@ -46,9 +48,16 @@ function answerHealth(res: ServerResponse, source: BoardSource | undefined): voi
     .end(JSON.stringify(health));
 }
 
+/** A read-only JSON route: GET only (405 otherwise), never cached. */
+function answerJson(req: IncomingMessage, res: ServerResponse, read: () => unknown): void {
+  if (req.method !== "GET") res.writeHead(405, { allow: "GET", "content-type": "text/plain" }).end("Read only");
+  else
+    res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" }).end(JSON.stringify(read()));
+}
+
 /**
  * The local server: `/events` streams every new event to the open pages (Server-Sent Events), `/health` says whether the logs are being read (503 when stale),
- * `/agents` returns the live agents as JSON for Motherboard.
+ * `/agents` returns the live agents as JSON for Motherboard, `/api/agents` the running ones for Forge's Agents tile.
  * It listens on 127.0.0.1 only and answers only requests addressed to this computer. No CORS headers on purpose.
  */
 export function startServer(port: number, source?: BoardSource): Promise<NightServer> {
@@ -95,13 +104,12 @@ export function startServer(port: number, source?: BoardSource): Promise<NightSe
       answerHealth(res, source);
       return;
     }
-    if (url.pathname === "/agents" && source?.agents) {
-      // Read only, pulled by Motherboard's server side; no CORS headers, so no page on another origin can read it.
-      if (req.method !== "GET") res.writeHead(405, { allow: "GET", "content-type": "text/plain" }).end("Read only");
-      else
-        res
-          .writeHead(200, { "content-type": "application/json", "cache-control": "no-store" })
-          .end(JSON.stringify(source.agents()));
+    // Read only, pulled by Motherboard (`/agents`) and Forge (`/api/agents`) server side; no CORS headers, so no
+    // page on another origin can read them.
+    const pulled =
+      url.pathname === "/agents" ? source?.agents : url.pathname === "/api/agents" ? source?.running : undefined;
+    if (pulled) {
+      answerJson(req, res, pulled);
       return;
     }
     if (req.method === "GET" && /^\/[^/]*$/.test(url.pathname) && url.pathname !== "/favicon.ico") {

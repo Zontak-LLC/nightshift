@@ -74,6 +74,7 @@ async function start(): Promise<void> {
     },
     projects: tiles,
     agents: () => board.desks(Date.now()),
+    running: () => board.running(Date.now()),
     health: () => engine.health(),
   });
   publish = server.publish;
