@@ -1,6 +1,7 @@
 import { request } from "node:http";
 import { describe, expect, it } from "vitest";
 import { startServer } from "../src/server/index.js";
+import { OLD_NAMES } from "./old-names.js";
 
 describe("the live stream", () => {
   it("sends each published event to a connected page, and answers health", async () => {
@@ -85,7 +86,7 @@ describe("the live stream", () => {
       const page = await (await fetch(`http://127.0.0.1:${server.port}/demo-app`)).text();
       expect(page).toContain("<title>Lens</title>");
       expect(page).toContain("Connecting to Lens…");
-      expect(page).not.toContain("Night Shift");
+      for (const old of OLD_NAMES) expect(page).not.toContain(old);
       const startPage = await (await fetch(`http://127.0.0.1:${server.port}/`)).text();
       expect(startPage).toContain("<title>Lens</title>");
       // The page loads nothing from the internet: no script, style, font or image from another host.

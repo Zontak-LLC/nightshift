@@ -5,7 +5,7 @@ before changing anything; update both in the same commit when a choice changes.
 
 ## Layout (the layers only point one way: watcher -> parser -> store -> server -> web)
 
-- `src/parser/`: a Claude Code log line -> a Night Shift event. Pure functions; no file system, no network.
+- `src/parser/`: a Claude Code log line -> a Lens event. Pure functions; no file system, no network.
 - `src/watcher/`: follows the log folders and hands new lines to the parser. Read only. Polls once a second
   (`tail.ts` works in BYTES and decodes only whole lines, so a read that ends inside a character never corrupts it;
   `follow.ts` walks `<root>/<project>/*.jsonl` and starts over when a file is replaced (new inode) or shrinks).

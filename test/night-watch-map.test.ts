@@ -8,6 +8,7 @@ import { loadPinned, projectTiles, watchSiteOf } from "../src/store/index.js";
 import { localWatchUrl, readState, watchOnBoard, watchOnTile } from "../src/watch/index.js";
 import { boardPage } from "../src/web/index.js";
 import { ageText, WATCH_VIEW, watchStrip } from "../src/web/watch-view.js";
+import { OLD_NAMES } from "./old-names.js";
 import { incident, state } from "./watch-fixtures.js";
 
 const cleanup: (() => void | Promise<void>)[] = [];
@@ -122,8 +123,7 @@ describe("the page", () => {
     ]) {
       expect(script).toContain(word);
     }
-    expect(boardPage()).not.toContain("Night Watch");
-    expect(boardPage()).not.toContain("Night Shift");
+    for (const old of OLD_NAMES) expect(boardPage()).not.toContain(old);
   });
 
   it("is told where Sentinel is, and only the address, nothing that could break the tag", () => {
